@@ -1,0 +1,12 @@
+{
+  "bot": "Follow Finder",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Daily search",
+      "schedule": "every day at {follow_finder_time}",
+      "prompt": "Run the daily search from instructions.md and share the shortlist."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

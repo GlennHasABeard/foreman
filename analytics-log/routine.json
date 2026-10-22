@@ -1,0 +1,12 @@
+{
+  "bot": "Analytics Log",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Nightly pull",
+      "schedule": "every day at {analytics_time}",
+      "prompt": "Run the night pull from instructions.md."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

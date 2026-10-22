@@ -1,0 +1,14 @@
+data/
+**/data/
+*.csv
+*.log
+state.json
+config.json
+!config.example.json
+site.env
+*.env
+.env*
+!.gitignore
+pulls/
+reports/
+public/

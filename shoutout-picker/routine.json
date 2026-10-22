@@ -1,0 +1,12 @@
+{
+  "bot": "Shoutout Picker",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Weekly list",
+      "schedule": "{shoutout_schedule}",
+      "prompt": "Build this week's shoutout list from instructions.md."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

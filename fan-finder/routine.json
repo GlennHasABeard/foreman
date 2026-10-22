@@ -1,0 +1,12 @@
+{
+  "bot": "Fan Finder",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Fan list",
+      "schedule": "every day at {fan_finder_time}",
+      "prompt": "Run the fan list from instructions.md and share it."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

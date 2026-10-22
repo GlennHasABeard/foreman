@@ -1,0 +1,12 @@
+{
+  "bot": "Rerun Picker",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Weekly reruns",
+      "schedule": "{rerun_schedule}",
+      "prompt": "Pull, pick, draft angles and render from instructions.md."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

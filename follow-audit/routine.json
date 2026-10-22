@@ -1,0 +1,17 @@
+{
+  "bot": "Follow Audit",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Light check",
+      "schedule": "every day at {follow_audit_time}",
+      "prompt": "Run the daily check from instructions.md and post the summary."
+    },
+    {
+      "name": "Full scan",
+      "schedule": "{full_scan_schedule}",
+      "prompt": "Give the full scan estimate. Run it only if it fits under today's cap."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

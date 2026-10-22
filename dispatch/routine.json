@@ -1,0 +1,12 @@
+{
+  "bot": "Dispatch",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Daily spend line",
+      "schedule": "every day at {spend_time}",
+      "prompt": "Run your daily routine from instructions.md."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

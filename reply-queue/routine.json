@@ -1,0 +1,12 @@
+{
+  "bot": "Reply Queue",
+  "timezone": "{timezone}",
+  "routines": [
+    {
+      "name": "Reply queue",
+      "schedule": "every day at {reply_queue_times}",
+      "prompt": "Run the queue from instructions.md and share it."
+    }
+  ],
+  "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."
+}

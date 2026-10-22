@@ -1,0 +1,24 @@
+{
+  "_help": "Example only. Foreman asks you these questions and writes each bot's config.json for you. Every null must be answered. Secrets never go in this file.",
+  "crew": {
+    "handle": "@yourhandle",
+    "timezone": "Area/City, for example America/Chicago",
+    "daily_spend_cap": null,
+    "bots": ["dispatch"],
+    "hosting": false,
+    "lists_url": "https://lists.yourdomain.com or https://yourproject.pages.dev, only if hosting is on",
+    "pages_project": "your Cloudflare Pages project name, only if hosting is on",
+    "kv_namespace_title": "your KV namespace title for checkmarks, only if hosting is on"
+  },
+  "follow-audit": {"timezone": null, "daily_spend_cap": null, "inactive_days": null, "dormant_days": null},
+  "follow-finder": {"queries": [], "min_followers": null, "max_followers": null, "verified_only": null,
+                    "adult_filter": true, "exclude_terms": [], "shortlist_size": null, "max_cost_per_run": null, "trial_max_cost": null},
+  "shoutout-picker": {"timezone": null, "account_kinds": "", "labels": [], "min_followers": null, "max_followers": null, "list_size": null},
+  "reply-queue": {"timezone": null, "skip_handles": [], "max_cost_per_run": null, "trial_max_cost": null,
+                  "exclude_terms": []},
+  "fan-finder": {"leads_verified_only": null, "leads_min_followers": null},
+  "rerun-picker": {"timezone": null, "picks": null, "min_age_days": null, "min_ratio": null, "media_only": null,
+                   "skip_media_types": ["text"], "skip_terms": [], "max_cost_per_pull": null},
+  "analytics-log": {"timezone": null, "has_premium": null, "has_monetization": null},
+  "secrets_needed_as_stored_secrets": ["X_CLIENT_ID", "X_CLIENT_SECRET", "CLOUDFLARE_API_TOKEN (hosting only)", "CLOUDFLARE_ACCOUNT_ID (hosting only)"]
+}

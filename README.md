@@ -9,9 +9,9 @@ Built with Grok Bot and AI tools.
 There are eight separate templates. All of them download from the same pinned GitHub release.
 
 - **Foreman** sets up the whole crew. You install one bot, Foreman. It explains the crew, asks you a few questions, builds the bots you pick, tests each one and hands you a front desk bot called Dispatch. After that you talk to Dispatch. The crew shares one X sign-in, one spend ledger and one daily cap.
-- **Seven individual templates**: Follow Audit, Follow Finder, Shoutout Picker, Reply Queue, Fan Finder, Rerun Picker and Analytics Log. Each one is its own template and sets itself up alone, with its own X sign-in, its own spend ledger and its own daily spend cap. See "Individual bot templates" below.
+- **Seven individual templates**: Follow Audit, Follow Finder, Shoutout Picker, Reply Queue, Fan Finder, Rerun Picker and Analytics Log. Each one is its own template and sets itself up alone. Each individual template has its own ledger and spend cap. All bots on one Grok Bot share one X sign-in. See "Individual bot templates" below.
 
-Pick one: either Foreman for the crew, or one or more individual templates. They are separate setups.
+Foreman and the individual templates are separate setups, but individual templates reuse an existing crew sign-in instead of making a new one.
 
 ## The bots
 

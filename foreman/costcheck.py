@@ -18,6 +18,28 @@ import json, os, sys
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 NAMES = dict(zip(DAYS, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]))
 HERE = os.path.dirname(os.path.abspath(__file__))
+BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
+
+_PRICES = None
+
+
+def P():
+    """The crew's shared price table (x_prices.py, next to follow_watch.py)."""
+    global _PRICES
+    if _PRICES is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (os.environ.get("FW_DIR"), os.path.join(BOTS_HOME, "follow-watch"),
+                  os.path.join(here, "..", "follow-audit"), os.path.join(here, "..", "follow-watch")):
+            if d and os.path.exists(os.path.join(d, "x_prices.py")):
+                if d not in sys.path:
+                    sys.path.insert(0, d)
+                import x_prices
+                _PRICES = x_prices
+                break
+        else:
+            raise SystemExit("x_prices.py not found. It ships next to follow_watch.py in the Follow Audit folder.")
+    return _PRICES
+
 
 
 def catalog():
@@ -48,6 +70,9 @@ def check(plan, cat=None, show=print):
     cap = float(plan["cap"])
     days = per_day(plan, cat)
     totals = {d: round(sum(c for _, c, _ in days[d]), 2) for d in DAYS}
+    r = P().RATES
+    show(f"X rates (shared price table): own reads ${r['owned']:.3f}, other posts ${r['post']:.3f}, "
+         f"profiles ${r['user']:.3f}.")
     show(f"Cap ${cap:.2f} a day. Cost per day, judged by the worst day:")
     for d in DAYS:
         mark = "  OVER" if totals[d] > cap + 1e-9 else ""

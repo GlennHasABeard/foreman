@@ -25,7 +25,10 @@ How it finds people
 
 What it never does
   No follow, like, repost, reply, post, DM, block or mute. GET requests only.
-  It reuses Follow Audit's read-only token, so X would refuse a write anyway.
+  It uses the crew's one shared read-only sign-in ($BOTS_HOME/dispatch/x_signin.json,
+  owned by Dispatch) through follow_watch.XClient, so X would refuse a write anyway.
+  Run it with CREW_BOT="Follow Finder". If the crew's cap stops it, the report says
+  "Stopped before search, cap reached" and lists the searches that didn't run.
 
 Spending
   Every post and profile X returns is counted. A run stops paging before the
@@ -47,6 +50,27 @@ from datetime import date, datetime, timedelta, timezone
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
+_PRICES = None
+
+
+def P():
+    """The crew's shared price table (x_prices.py, next to follow_watch.py)."""
+    global _PRICES
+    if _PRICES is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (os.environ.get("FW_DIR"), os.path.join(BOTS_HOME, "follow-watch"),
+                  os.path.join(here, "..", "follow-audit"), os.path.join(here, "..", "follow-watch")):
+            if d and os.path.exists(os.path.join(d, "x_prices.py")):
+                if d not in sys.path:
+                    sys.path.insert(0, d)
+                import x_prices
+                _PRICES = x_prices
+                break
+        else:
+            raise SystemExit("x_prices.py not found. It ships next to follow_watch.py in the Follow Audit folder.")
+    return _PRICES
+
+
 DEFAULT_CONFIG = {
     "follow_watch_dir": BOTS_HOME + "/follow-watch",
     "min_followers": None,
@@ -67,8 +91,6 @@ DEFAULT_CONFIG = {
     "max_cost_per_run": None,
     "trial_posts_per_query": 40,
     "trial_max_cost": None,
-    "price_per_post": 0.005,
-    "price_per_user": 0.010,
     "projection_targets": [5, 10, 15, 25],
 }
 
@@ -196,14 +218,16 @@ class Spend:
         self.posts = 0
         self.users = 0
         self.requests = 0
+        self.crew_cap = None  # set when the crew's daily cap stopped a read
 
-    def low(self, posts=None, users=None):
-        return (self.posts if posts is None else posts) * self.cfg["price_per_post"]
-
-    def high(self, posts=None, users=None):
+    def cost(self, posts=None, users=None):
+        """Priced from the crew's one table (x_prices.py), the same one the spend ledger uses."""
         p = self.posts if posts is None else posts
         u = self.users if users is None else users
-        return p * self.cfg["price_per_post"] + u * self.cfg["price_per_user"]
+        return P().estimate(post=p, attached_user=u)
+
+    # older names, kept so callers and saved runs read the same number
+    low = high = cost
 
     def room_for(self, page_posts):
         # worst case: every post on the next page has a new author
@@ -234,7 +258,11 @@ def search(client, spend, query, want, sort_order):
                   "sort_order": sort_order}
         if token:
             params["next_token"] = token
-        body = client.get("/tweets/search/recent", params)
+        try:
+            body = client.get("/tweets/search/recent", params)
+        except getattr(sys.modules.get("follow_watch"), "CapReached", ()) as e:
+            spend.crew_cap = e
+            return posts, users, True
         spend.requests += 1
         data = body.get("data", []) or []
         inc = (body.get("includes") or {}).get("users", []) or []
@@ -374,8 +402,8 @@ def projection_rows(cfg, posts, users, new_candidates):
     rows = []
     for target in cfg["projection_targets"]:
         need = target / per_post
-        low = need * cfg["price_per_post"]
-        high = low + need * users_per_post * cfg["price_per_user"]
+        low = need * P().RATES["post"]
+        high = low + need * users_per_post * P().RATES["user"]
         rows.append((target, int(round(need)), low, high))
     return per_post, users_per_post, rows
 
@@ -389,8 +417,8 @@ def write_report(p, cfg, now, mode, spend, stopped, kept, dropped, shortlist, pa
 
     if mode == "verify":
         L += ["## Cost", "",
-              f"- Profiles looked up: {spend.users:,} at ${cfg['price_per_user']:.3f} each",
-              f"- Posts looked up: {spend.posts:,} at ${cfg['price_per_post']:.3f} each",
+              f"- Profiles looked up: {spend.users:,} at ${P().RATES['user']:.3f} each",
+              f"- Posts looked up: {spend.posts:,} at ${P().RATES['post']:.3f} each",
               f"- Estimated cost: {money(spend.high())}",
               "", "Check the X developer console for the billed amount.", ""]
     else:
@@ -398,9 +426,10 @@ def write_report(p, cfg, now, mode, spend, stopped, kept, dropped, shortlist, pa
           f"- Search requests: {spend.requests}",
           f"- Posts read: {spend.posts:,}",
           f"- Author profiles attached: {spend.users:,}",
-          f"- Estimated cost: {money(spend.low())} if X bills posts only, "
-          f"{money(spend.high())} if it also bills each attached profile",
+          f"- Estimated cost: {money(spend.cost())} (posts at ${P().RATES['post']:.3f}, attached profiles at "
+          f"${P().RATES['attached_user']:.3f}, from the crew's price table, the same one the spend ledger uses)",
           f"- Cap for this run: {money(spend.cap)}" + (" (reached, paging stopped early)" if stopped else ""),
+          ] + ([f"- The crew's daily cap stopped this run: {spend.crew_cap}"] if spend.crew_cap else []) + [
           "", "Check the X developer console for the billed amount. It settles which of the two numbers is right.", ""]
 
     proj = None if mode == "verify" else projection_rows(cfg, spend.posts, spend.users, len(kept))
@@ -439,6 +468,14 @@ def write_report(p, cfg, now, mode, spend, stopped, kept, dropped, shortlist, pa
 
     L += ["## Why authors were left out", ""]
     if dropped:
+        total = sum(len(v) for v in dropped.values())
+        L.append(f"Each filter and how many creators it dropped ({total:,} in all, {len(kept):,} kept):")
+        L.append("")
+        for why, names in sorted(dropped.items(), key=lambda x: -len(x[1])):
+            extra = (f" (your range is {cfg['min_followers']:,} to {cfg['max_followers']:,} followers)"
+                     if why == "outside follower range" else "")
+            L.append(f"- {why}: {len(names):,}{extra}")
+        L += ["", "Who each filter dropped:", ""]
         for why, names in sorted(dropped.items(), key=lambda x: -len(x[1])):
             if len(names) <= 20:
                 L.append(f"- {why} ({len(names)}): " + ", ".join("@" + n for n in names))
@@ -559,8 +596,8 @@ def run(mode, p, cfg, client, fw, fw_store, now):
     followers = {i for i, a in accounts.items() if a.get("follower_now")}
     my_id = (fw_state.get("me") or {}).get("id")
     notes = []
-    if not fw_state.get("baseline_date"):
-        notes.append("No Follow Audit scan found, so people you already follow could not be filtered out.")
+    if scan_note(fw_state):
+        notes.append(scan_note(fw_state))
 
     trial = mode == "trial"
     per_q = cfg["trial_posts_per_query"] if trial else cfg["posts_per_query"]
@@ -570,17 +607,20 @@ def run(mode, p, cfg, client, fw, fw_store, now):
 
     # split the cap evenly so every search runs, assuming the worst case of
     # one new author per post
-    worst_per_post = cfg["price_per_post"] + cfg["price_per_user"]
+    worst_per_post = P().RATES["post"] + P().RATES["user"]
     fair = int(cap / (len(cfg["queries"]) * worst_per_post))
     if fair < per_q:
         per_q = max(10, fair)
         notes.append(f"Cap of {money(cap)} split across {len(cfg['queries'])} searches allows "
                      f"{per_q} posts each.")
 
-    all_posts, all_users, stopped, used = [], {}, False, []
+    all_posts, all_users, stopped, used, not_run = [], {}, False, [], []
     verified = cfg["verified_only"]
     for q in cfg["queries"]:
         query = build_query(q, cfg, verified)
+        if spend.crew_cap:
+            not_run.append(q)
+            continue
         try:
             posts, users, hit = search(client, spend, query, per_q, cfg["sort_order"])
         except SystemExit as e:
@@ -599,6 +639,16 @@ def run(mode, p, cfg, client, fw, fw_store, now):
         all_users.update(users)
         if hit:
             stopped = True
+        if spend.crew_cap and not posts:
+            not_run.append(q)
+            used.pop()
+    if spend.crew_cap:
+        msg = (f"Stopped before search, cap reached (the crew's daily cap). "
+               + (f"Searches not run: {', '.join(not_run)}. " if not_run else "The last search was cut short. ")
+               + "The shortlist below only covers what was read, so a short or empty list is not a real result. "
+               + str(spend.crew_cap))
+        notes.insert(0, msg)
+        print(f"{client.who}: {msg}")
 
     kept, dropped = evaluate(all_users, all_posts, cfg, fw, fw_cfg, today, following, followers, seen, my_id)
     shortlist = kept[:cfg["shortlist_size"]]
@@ -617,7 +667,8 @@ def run(mode, p, cfg, client, fw, fw_store, now):
     runs.append({"ts": now.isoformat(timespec="seconds"), "mode": mode, "requests": spend.requests,
                  "posts": spend.posts, "users": spend.users, "candidates": len(kept),
                  "shortlist": len(shortlist), "cost_low": round(spend.low(), 4),
-                 "cost_high": round(spend.high(), 4), "stopped_for_cap": stopped})
+                 "cost_high": round(spend.high(), 4), "stopped_for_cap": stopped,
+                 "crew_cap": bool(spend.crew_cap), "searches_not_run": not_run})
     write_json(p.runs, runs[-200:])
 
     report = write_report(p, cfg, now, mode, spend, stopped, kept, dropped, shortlist, past, used, notes)
@@ -662,16 +713,21 @@ def verify(p, cfg, client, fw, fw_store, now, src):
     followers = {i for i, a in accounts.items() if a.get("follower_now")}
     my_id = (fw_state.get("me") or {}).get("id")
     notes = [f"Verify run on {len(names)} handles and {len(post_ids)} post links from {os.path.basename(src)}."]
-    if not fw_state.get("baseline_date"):
-        notes.append("No Follow Audit scan found, so people you already follow could not be filtered out.")
+    if scan_note(fw_state):
+        notes.append(scan_note(fw_state))
 
     spend = Spend(cfg, cfg["max_cost_per_run"])
-    if len(names) * cfg["price_per_user"] + len(post_ids) * cfg["price_per_post"] > spend.cap:
+    if len(names) * P().RATES["user"] + len(post_ids) * P().RATES["post"] > spend.cap:
         raise SystemExit("This list would cost more than max_cost_per_run. Shorten it or raise the cap.")
-    users, missing = {}, []
+    users, missing, unchecked = {}, [], []
     for i in range(0, len(names), 100):
         chunk = names[i:i + 100]
-        body = client.get("/users/by", {"usernames": ",".join(chunk), "user.fields": fw.USER_FIELDS})
+        try:
+            body = client.get("/users/by", {"usernames": ",".join(chunk), "user.fields": fw.USER_FIELDS})
+        except fw.CapReached as e:
+            spend.crew_cap = e
+            unchecked = names[i:]
+            break
         spend.requests += 1
         for u in body.get("data", []) or []:
             users[u["id"]] = u
@@ -679,14 +735,30 @@ def verify(p, cfg, client, fw, fw_store, now, src):
         found = {u["username"].lower() for u in body.get("data", []) or []}
         missing += [n for n in chunk if n.lower() not in found]
     posts = []
+    posts_unchecked = 0
     for i in range(0, len(post_ids), 100):
         chunk = post_ids[i:i + 100]
-        body = client.get("/tweets", {"ids": ",".join(chunk), "tweet.fields": TWEET_FIELDS})
+        if spend.crew_cap:
+            posts_unchecked = len(post_ids) - i
+            break
+        try:
+            body = client.get("/tweets", {"ids": ",".join(chunk), "tweet.fields": TWEET_FIELDS})
+        except fw.CapReached as e:
+            spend.crew_cap = e
+            posts_unchecked = len(post_ids) - i
+            break
         spend.requests += 1
         posts += body.get("data", []) or []
         spend.posts += len(chunk)
     if missing:
         notes.append("Not found (renamed, suspended or deleted): " + ", ".join("@" + m for m in missing))
+    if spend.crew_cap:
+        first = "profile lookups" if unchecked else "post lookups"
+        msg = (f"Stopped before {first}, cap reached (the crew's daily cap). Not checked: "
+               f"{len(unchecked)} handles and {posts_unchecked} post links. They are not counted as missing "
+               f"or filtered out. {spend.crew_cap}")
+        notes.insert(0, msg)
+        print(f"{client.who}: {msg}")
 
     seen = read_json(p.seen, {})
     kept, dropped = evaluate(users, posts, cfg, fw, fw_cfg, today, following, followers, seen, my_id)
@@ -698,9 +770,10 @@ def verify(p, cfg, client, fw, fw_store, now, src):
     runs.append({"ts": now.isoformat(timespec="seconds"), "mode": "verify", "requests": spend.requests,
                  "posts": spend.posts, "users": spend.users, "candidates": len(kept),
                  "shortlist": len(shortlist), "cost_low": round(spend.high(), 4),
-                 "cost_high": round(spend.high(), 4), "stopped_for_cap": False})
+                 "cost_high": round(spend.high(), 4), "stopped_for_cap": bool(spend.crew_cap),
+                 "crew_cap": bool(spend.crew_cap)})
     write_json(p.runs, runs[-200:])
-    report = write_report(p, cfg, now, "verify", spend, False, kept, dropped, shortlist, None,
+    report = write_report(p, cfg, now, "verify", spend, bool(spend.crew_cap), kept, dropped, shortlist, None,
                           [f"links from {os.path.basename(src)}"], notes)
     write_csv(p, kept)
     write_html(p, shortlist, now, cfg)
@@ -714,7 +787,8 @@ def estimate(p, cfg):
     r = runs[-1]
     proj = projection_rows(cfg, r["posts"], r["users"], r["candidates"])
     print(f"Last run {r['ts']} ({r['mode']}): {r['posts']} posts, {r['users']} profiles, "
-          f"{r['candidates']} candidates, cost {money(r['cost_low'])} to {money(r['cost_high'])}")
+          f"{r['candidates']} candidates, cost {money(r['cost_low'])} to {money(r['cost_high'])}"
+          + (" (stopped for the cap, so these counts are partial)" if r.get("stopped_for_cap") else ""))
     if not proj:
         print("No candidates in the last run, nothing to project.")
         return
@@ -723,12 +797,51 @@ def estimate(p, cfg):
               f"{money(low * 30)} to {money(high * 30)} per 30 days")
 
 
+def nice_round(n):
+    """Round to 1 or 2 leading digits, so 19,350 becomes 20,000."""
+    if n < 100:
+        return int(n)
+    mag = 10 ** (len(str(int(n))) - 2)
+    return int(round(n / mag) * mag)
+
+
+def suggest_range(my_followers):
+    """Follower range Foreman suggests. Small accounts are the likeliest to follow back, so the
+    floor stays at 50 (the same as the live Creator Scout). The ceiling is 3 times your own
+    follower count, rounded, and never under 5,000."""
+    my_followers = max(0, int(my_followers or 0))
+    return 50, nice_round(max(5000, 3 * my_followers))
+
+
+def scan_note(fw_state):
+    """Plain words for what Follow Audit data this run could use."""
+    if fw_state.get("baseline_date"):
+        return None
+    last = fw_state.get("last_full") or {}
+    if last.get("partial"):
+        read, real = last.get("read") or {}, last.get("real_counts") or {}
+        def part(k):
+            n, of = read.get(k, 0) or 0, real.get(k)
+            return f"{n:,} of {of:,} {k}" if of else f"{n:,} {k}"
+        return (f"Only a partial Follow Audit scan exists ({part('followers')} and {part('following')}). "
+                "A partial scan is not a starting point for Follow Audit, and Follow Finder can only leave out "
+                "people you follow from the part it read. Some picks may be people you already follow. "
+                "A full Follow Audit scan fixes this.")
+    return "No Follow Audit scan found, so people you already follow could not be filtered out."
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only finder for creators in your niche on X.")
-    ap.add_argument("command", choices=["trial", "run", "verify", "estimate"])
-    ap.add_argument("file", nargs="?", help="verify: text file with X profile and post links")
+    ap.add_argument("command", choices=["trial", "run", "verify", "estimate", "suggest-range"])
+    ap.add_argument("file", nargs="?", help="verify: text file with X profile and post links. "
+                                            "suggest-range: your follower count")
     ap.add_argument("--dir", default=os.environ.get("CS_DIR", BOTS_HOME + "/creator-scout"))
     args = ap.parse_args(argv)
+    if args.command == "suggest-range":
+        lo, hi = suggest_range(int(str(args.file or "0").replace(",", "")))
+        print(f"Suggested follower range: {lo:,} to {hi:,}. Floor 50, ceiling 3 times your followers "
+              "(at least 5,000). Pick any range you like.")
+        return
     p = Paths(args.dir)
     cfg = load_config(p)
     if args.command == "estimate":

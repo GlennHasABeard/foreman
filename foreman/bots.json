@@ -1,12 +1,12 @@
 {
-  "_about": "Catalog Foreman reads during setup. Costs are rough numbers from one real account's first week of runs on the pay per use X API (owned read $0.001, post read $0.005, user lookup $0.010). Billed amounts came in at about 65 to 100 percent of the scripts' own estimates.",
+  "_about": "Catalog Foreman reads during setup. Costs are rough numbers from one real account's first week of runs on the pay per use X API (owned read $0.001, post read $0.005, user lookup $0.010, all from the one price table in follow-audit/x_prices.py). Billed amounts came in at about 65 to 100 percent of the scripts' own estimates.",
   "bots": [
     {"slug": "dispatch", "name": "Dispatch", "required": true, "folder": "dispatch", "scripts": ["selfcheck.py", "spend.py"],
      "does": "Your front desk. Ask it anything about the crew, it runs or explains the other bots, keeps the shared spend ledger and posts a short daily spend line.",
      "x_reads": "none of its own (one $0.01 sign in check during setup)",
      "cost_per_run": 0.0, "default_runs_per_month": 30, "cost_note": "$0. It reads the shared ledger and, if you allow it, the X developer console usage page in the browser.",
      "schedule_question": "What time each day should Dispatch post the spend line?"},
-    {"slug": "follow-audit", "name": "Follow Audit", "required": false, "folder": "follow-watch", "scripts": ["follow_watch.py"],
+    {"slug": "follow-audit", "name": "Follow Audit", "required": false, "folder": "follow-watch", "scripts": ["follow_watch.py", "x_prices.py"],
      "does": "Tracks who follows you and who you follow. Flags inactive, dormant and gone accounts and who unfollowed. It never unfollows anyone, it only lists them.",
      "x_reads": "your follower and following lists, recent posts of flagged accounts",
      "cost_per_run": 0.13, "default_runs_per_month": 30, "full_scan_per_1000_accounts": [0.65, 1.0],

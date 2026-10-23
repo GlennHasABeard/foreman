@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Self-check for one bot in the crew. Read only.
 
-  python3 selfcheck.py --bot reply-queue
+  python3 selfcheck.py --bot reply-queue            (includes the ~$0.01 X read)
+  python3 selfcheck.py --bot reply-queue --offline  (no X request at all)
 
 Checks three things and prints a plain report, then the bot's intro:
   1. Secrets: the stored secrets this bot needs are present. Values are never printed.
@@ -13,6 +14,27 @@ Anything missing or failed is flagged by name. Nothing is left blank.
 import argparse, json, os, sys, tempfile
 
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
+
+_PRICES = None
+
+
+def P():
+    """The crew's shared price table (x_prices.py, next to follow_watch.py)."""
+    global _PRICES
+    if _PRICES is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (os.environ.get("FW_DIR"), os.path.join(BOTS_HOME, "follow-watch"),
+                  os.path.join(here, "..", "follow-audit"), os.path.join(here, "..", "follow-watch")):
+            if d and os.path.exists(os.path.join(d, "x_prices.py")):
+                if d not in sys.path:
+                    sys.path.insert(0, d)
+                import x_prices
+                _PRICES = x_prices
+                break
+        else:
+            raise SystemExit("x_prices.py not found. It ships next to follow_watch.py in the Follow Audit folder.")
+    return _PRICES
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 SUBDIRS = {
@@ -38,14 +60,23 @@ def check_secrets(crew, bot):
     rows, ok = [], True
     x_needed = bot["slug"] not in ("analytics-log",)
     if x_needed:
-        has_bearer = bool(os.environ.get("X_BEARER_TOKEN"))
         has_app = bool(os.environ.get("X_CLIENT_ID")) and bool(os.environ.get("X_CLIENT_SECRET"))
-        has_tok = os.path.exists(os.path.join(BOTS_HOME, "follow-watch", "data", "token.json"))
-        if has_bearer or has_app or has_tok:
-            rows.append("X sign in: found (" + ", ".join(n for n, v in (("X_BEARER_TOKEN", has_bearer),
-                        ("X_CLIENT_ID and X_CLIENT_SECRET", has_app), ("saved sign in", has_tok)) if v) + ")")
+        signin = os.path.join(BOTS_HOME, "dispatch", "x_signin.json")
+        if has_app:
+            rows.append("X app secrets: found (X_CLIENT_ID and X_CLIENT_SECRET)")
         else:
-            rows.append("X sign in: MISSING. Add X_CLIENT_ID and X_CLIENT_SECRET as stored secrets.")
+            rows.append("X app secrets: MISSING. Add X_CLIENT_ID and X_CLIENT_SECRET as stored secrets.")
+            ok = False
+        if os.path.exists(signin):
+            mode = os.stat(signin).st_mode & 0o777
+            if mode & 0o077:
+                rows.append(f"Shared X sign in: found at {signin} but readable by others ({oct(mode)}). FLAG.")
+                ok = False
+            else:
+                rows.append(f"Shared X sign in: found at {signin} (owner-only, owned by Dispatch)")
+        else:
+            rows.append(f"Shared X sign in: MISSING at {signin}. X sign-in needs to be redone "
+                        "(Foreman runs follow_watch.py auth once for the whole crew).")
             ok = False
     if crew.get("hosting") and bot["slug"] in ("dispatch", "follow-finder"):
         for k in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
@@ -59,11 +90,13 @@ def check_secrets(crew, bot):
     return ok, rows
 
 
-def check_read(bot):
+def check_read(bot, offline=False):
     if bot["slug"] == "analytics-log":
         return True, "X read: skipped. This bot uses the browser, not the API. First real run will confirm sign in."
+    if offline:
+        return True, "X read: skipped (--offline). Nothing was sent to X."
     sys.path.insert(0, os.path.join(BOTS_HOME, "follow-watch"))
-    os.environ.setdefault("BOT_NAME", bot["name"])
+    os.environ["CREW_BOT"] = bot["name"]  # book the test read to this bot, never a default
     try:
         import follow_watch as fw
         store = fw.Store(os.path.join(BOTS_HOME, "follow-watch"))
@@ -71,7 +104,7 @@ def check_read(bot):
         client = fw.XClient(store, cfg, fw.Meter(cfg))
         me = client.me()
         client._book()
-        return True, f"X read: OK, signed in as @{me.get('username')} (about $0.01, booked to the spend ledger)"
+        return True, f"X read: OK, signed in as @{me.get('username')} (about ${P().RATES['user']:.3f}, booked to the spend ledger)"
     except SystemExit as e:
         return False, f"X read: FAILED. {e}"
     except Exception as e:  # noqa
@@ -98,6 +131,7 @@ def check_folders(bot):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bot", required=True)
+    ap.add_argument("--offline", action="store_true", help="skip the paid X read")
     a = ap.parse_args(argv)
     crew = load_crew()
     bot = next((b for b in crew["bots"] if b["slug"] == a.bot), None)
@@ -105,7 +139,7 @@ def main(argv=None):
         raise SystemExit(f"FLAG: {a.bot} is not in this crew.")
     print(f"== Self-check: {bot['name']} ==")
     s_ok, s_rows = check_secrets(crew, bot)
-    r_ok, r_row = check_read(bot)
+    r_ok, r_row = check_read(bot, a.offline)
     f_ok, f_rows = check_folders(bot)
     for r in s_rows + [r_row] + f_rows:
         print("  - " + r)

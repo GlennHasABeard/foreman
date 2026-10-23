@@ -1,9 +1,9 @@
 #!/bin/sh
 # Download the pinned Foreman release, check it and unzip it.
-# Usage: sh fetch_release.sh [tag]   (default tag v0.1.0, never main)
+# Usage: sh fetch_release.sh [tag]   (default tag v0.2.0, never main)
 set -eu
-TAG="${1:-v0.1.0}"
-case "$TAG" in main|master|"") echo "Use a pinned release tag like v0.1.0, never a branch." >&2; exit 1 ;; esac
+TAG="${1:-v0.2.0}"
+case "$TAG" in main|master|"") echo "Use a pinned release tag like v0.2.0, never a branch." >&2; exit 1 ;; esac
 BASE="https://github.com/GlennHasABeard/foreman/releases/download/$TAG"
 ZIP="foreman-$TAG.zip"
 WORK="$(mktemp -d)"

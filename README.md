@@ -19,11 +19,19 @@ You install one bot, Foreman. Foreman explains the crew, asks you a few question
 | Reply Queue | Sorts replies and mentions worth answering. | About $0.25 to $1.07 a run |
 | Fan Finder | Finds people who engage with you but do not follow yet. | $0 when it reuses Reply Queue's pull |
 | Rerun Picker | Suggests older posts worth posting again, with fresh angles. | About $0.02 a week, plus about $0.001 per post one time |
-| Analytics Log | Saves your X analytics exports every day so you keep a history. Uses the browser, not the API. | $0 |
+| Analytics Log | Saves your X analytics exports every day so you keep a history. Uses the browser, not the API. | $0, no API cost |
 
 ## Costs
 
-The X API is pay per use. Rough prices are $0.001 to read one of your own posts, $0.005 for someone else's post and $0.01 for a profile lookup. The numbers above come from one real account's first week. Billed amounts came in at about 65 to 100 percent of the scripts' own estimates. With every bot on its normal schedule, expect roughly $30 to $80 a month. A light setup (Dispatch, Follow Audit light checks, Rerun Picker, Analytics Log) is a few dollars a month.
+The X API is pay per use. Every bot and the spend ledger use one price table, `follow-audit/x_prices.py`, so a bot's own estimate and the ledger always agree. Run `python3 x_prices.py` to see it.
+
+| What is read | Price each |
+|---|---|
+| Your own data: your posts, mentions, likes, followers, following and the likers of your posts | $0.001 |
+| Other people's posts: search, quote posts, someone else's posts | $0.005 |
+| A profile lookup, or a profile attached to a post | $0.010 |
+
+Check the table against the X developer console after the first days. If X bills a kind of read at a different rate, change it in that one file. The numbers above come from one real account's first week. Billed amounts came in at about 65 to 100 percent of the scripts' own estimates. With every bot on its normal schedule, expect roughly $30 to $80 a month. A light setup (Dispatch, Follow Audit light checks, Rerun Picker, Analytics Log) is a few dollars a month.
 
 You set a daily spend cap. All bots share it. Any request that could push the day past the cap is stopped before it is sent. Check the X developer console for what you were actually billed.
 
@@ -51,14 +59,32 @@ Where the secrets go. When Foreman asks, it sends you a stored secret request. P
 | `X_CLIENT_ID` | OAuth 2.0 Client ID |
 | `X_CLIENT_SECRET` | OAuth 2.0 Client Secret |
 
-The scripts read these two names from the environment. Then Foreman runs the one time sign in, `python3 follow_watch.py auth`. It opens an X page in Grok Bot's browser, you click Authorize, and X sends the browser back to `http://127.0.0.1:8765/callback` on Grok Bot's computer, where the script is listening. If that page cannot be reached, Foreman uses `python3 follow_watch.py auth --paste` instead: you copy the full address the browser lands on after Authorize and give it to Foreman. It holds a one time code that only works for this sign in and expires in minutes. It is not your password or a secret. The sign in asks for these read scopes only: tweet.read, users.read, follows.read and offline.access, plus like.read if you pick Reply Queue or Fan Finder.
+The scripts read these two names from the environment and never write them to a file. Then Foreman runs the one time sign in, once for the whole crew, `CREW_BOT="Foreman" python3 follow_watch.py auth`.
+
+Main path. Foreman opens an X page in Grok Bot's own browser. You click Authorize there. X sends that browser back to `http://127.0.0.1:8765/callback` on Grok Bot's computer, where the script is already listening, and the sign in finishes by itself. Nothing to copy.
+
+Backup, only if that page cannot load, for example when you approve on your phone. Before Foreman sends the link it tells you: you have about 30 seconds after you approve. Get ready first. Click Authorize, copy the full address from the address bar of the page that will not load, and paste it to Foreman at once. Do not stop to read the page. Foreman hands it straight to the waiting script (`follow_watch.py auth-paste`), which swaps it for the sign in the moment it arrives. In our own test the first paste came too late and the second one worked.
+
+If X says the code expired, nothing is broken. Ask Foreman for a new link and try again, a little faster. The code only works for this sign in. It is not your password or a secret. The sign in asks for these read scopes only: tweet.read, users.read, follows.read and offline.access, plus like.read if you pick Reply Queue or Fan Finder.
+
+One sign in, shared. The sign in is saved once, in Dispatch's folder (`dispatch/x_signin.json`, readable only by its owner), and every bot uses that one file. No bot keeps its own copy and nothing ever copies it. When it needs renewing, one bot renews it under a lock while the others wait and then read the new one. If a renewal fails, the bot stops and says "X sign-in needs to be redone", and Foreman runs the sign in again.
+
+A second sign in to the same X app cancels the first. That is why the whole crew shares one sign in. It also means a test crew needs its own X app. If you sign a test crew in to the same app your live crew uses, your live bots lose their sign in.
+
+Every bot books its own reads. Each script runs with the bot's name (`CREW_BOT="Reply Queue"` and so on) and refuses to run without it, so the spend ledger shows what each bot spent. Each request is written to the ledger, under a lock, before the next one is sent. If the daily cap stops a bot, its result says so, for example "stopped before mentions, cap reached", never a 0 that looks real.
+
+What each bot says when a cap stops it:
+
+- Reply Queue reads your mentions and quotes first and your likes last. If the mentions were not read, it says so, and the count is missing, not zero. If your likes were not finished, it keeps every item and marks the ones it could not check "may already be liked".
+- Fan Finder warns when the pull it uses stopped on the cap, so a low count is not a real count.
+- Follow Finder lists how many creators each filter dropped. If only a partial Follow Audit scan exists, it says so and explains that people you already follow may still show up until a full scan runs.
 
 If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` the same way. See `site/HOSTING.md`.
 
 ## Install
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v0.1.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v0.1.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v0.1.0` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v0.2.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v0.2.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v0.2.0` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -69,7 +95,7 @@ Some jobs, like a Follow Audit full scan, cost more than a normal day. Tell Disp
 
 ## Analytics Log needs the browser
 
-Analytics Log does not use the X API. It downloads your analytics exports through Grok Bot's browser, so that browser must be signed in to your X account. Sign in once on Grok Bot's computer and the login stays. If the browser cannot run unattended, or X asks you to sign in again, the scheduled run cannot finish on its own. In that case open the chat and tell Analytics Log to run now while you are there.
+Analytics Log does not use the X API, so it has no API cost and books nothing to the spend ledger. It downloads your analytics exports through Grok Bot's browser, so that browser must be signed in to your X account. Sign in once on Grok Bot's computer and the login stays. If the browser cannot run unattended, or X asks you to sign in again, the scheduled run cannot finish on its own. In that case open the chat and tell Analytics Log to run now while you are there.
 
 ## Hosting (optional)
 

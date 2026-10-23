@@ -20,7 +20,9 @@ How a post is judged
   quoted or reposted by you in the last 60 days, not shown as a pick in the last
   56 days, and free of sponsor or affiliate markers.
 
-Read-only. GET requests only. Uses the Follow Audit sign-in.
+Read-only. GET requests only. Uses the crew's one shared sign-in
+($BOTS_HOME/dispatch/x_signin.json, owned by Dispatch). Run with CREW_BOT="Rerun Picker".
+A pull a cap stops says what it didn't read, and the next pull fills the gap.
 Data lives in /workspace/reruns (override with --dir or RR_DIR).
 """
 
@@ -33,8 +35,33 @@ import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 
+class CapReached(Exception):
+    """Replaced by follow_watch.CapReached once the shared client is loaded."""
+
+
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
+
+_PRICES = None
+
+
+def P():
+    """The crew's shared price table (x_prices.py, next to follow_watch.py)."""
+    global _PRICES
+    if _PRICES is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (os.environ.get("FW_DIR"), os.path.join(BOTS_HOME, "follow-watch"),
+                  os.path.join(here, "..", "follow-audit"), os.path.join(here, "..", "follow-watch")):
+            if d and os.path.exists(os.path.join(d, "x_prices.py")):
+                if d not in sys.path:
+                    sys.path.insert(0, d)
+                import x_prices
+                _PRICES = x_prices
+                break
+        else:
+            raise SystemExit("x_prices.py not found. It ships next to follow_watch.py in the Follow Audit folder.")
+    return _PRICES
+
 
 DEFAULT_CONFIG = {
     "follow_watch_dir": BOTS_HOME + "/follow-watch",
@@ -48,7 +75,6 @@ DEFAULT_CONFIG = {
     "skip_media_types": None,
     "skip_terms": None,
     "max_cost_per_pull": None,
-    "price_owned": 0.001,
     "timezone": None,
 }
 
@@ -143,6 +169,8 @@ def ref(t, kind):
 # ----------------------------------------------------------------------------
 
 def cmd_pull(st, client, days=None):
+    """Reads new posts first, then any gap an earlier capped pull left (with until_id), so
+    'the rest come next pull' is true. A cap stop always says what wasn't read."""
     cfg = st.cfg
     state = st.state()
     posts = st.posts()
@@ -152,58 +180,105 @@ def cmd_pull(st, client, days=None):
     read = 1
     requests = 1
     capped = False
-    params = {"max_results": 100, "tweet.fields": TWEET_FIELDS,
-              "expansions": "attachments.media_keys", "media.fields": "type"}
+    crew_cap = None
+    not_read = []
+    base = {"max_results": 100, "tweet.fields": TWEET_FIELDS,
+            "expansions": "attachments.media_keys", "media.fields": "type"}
+
+    def read_timeline(extra):
+        """Newest first. Returns (newest id, oldest id, finished)."""
+        nonlocal read, requests, capped, crew_cap
+        token, hi, lo = None, None, None
+        while True:
+            if read * P().RATES["owned"] >= cfg["max_cost_per_pull"]:
+                capped = True
+                return hi, lo, False
+            p = {**base, **extra}
+            if token:
+                p["pagination_token"] = token
+            try:
+                body = client.get(f"/users/{my_id}/tweets", p)
+            except CapReached as e:
+                capped, crew_cap = True, e
+                return hi, lo, False
+            requests += 1
+            data = body.get("data", []) or []
+            read += len(data)
+            media = {m["media_key"]: m.get("type") for m in (body.get("includes") or {}).get("media", []) or []}
+            for t in data:
+                keys = (t.get("attachments") or {}).get("media_keys") or []
+                types = sorted({media.get(k, "media") for k in keys})
+                if ref(t, "retweeted"):
+                    kind = "repost"
+                elif ref(t, "replied_to"):
+                    kind = "reply"
+                elif ref(t, "quoted"):
+                    kind = "quote"
+                else:
+                    kind = "original"
+                posts[t["id"]] = {"created": t.get("created_at"), "kind": kind, "text": (t.get("text") or "")[:280],
+                                  "media": types, "media_keys": keys, "metrics": t.get("public_metrics") or {},
+                                  "quoted": ref(t, "quoted"), "reposted": ref(t, "retweeted"),
+                                  "metrics_at": iso(now_utc()),
+                                  "settled": bool(t.get("created_at")) and (now_utc() - ts(t["created_at"])).days >= 7}
+                if hi is None or int(t["id"]) > int(hi):
+                    hi = t["id"]
+                if lo is None or int(t["id"]) < int(lo):
+                    lo = t["id"]
+            token = (body.get("meta") or {}).get("next_token")
+            if not token or not data:
+                return hi, lo, True
+
+    # 1. what's new
     if days:
         # re-read the last N days in full, e.g. to fill in media ids on posts read before they were saved
-        params["start_time"] = iso(now_utc() - timedelta(days=days))
-    elif state.get("since_id"):
-        params["since_id"] = state["since_id"]
-    token, newest = None, state.get("since_id")
-    while True:
-        if read * cfg["price_owned"] >= cfg["max_cost_per_pull"]:
-            capped = True
-            break
-        p = dict(params)
-        if token:
-            p["pagination_token"] = token
-        body = client.get(f"/users/{my_id}/tweets", p)
-        requests += 1
-        data = body.get("data", []) or []
-        read += len(data)
-        media = {m["media_key"]: m.get("type") for m in (body.get("includes") or {}).get("media", []) or []}
-        for t in data:
-            keys = (t.get("attachments") or {}).get("media_keys") or []
-            types = sorted({media.get(k, "media") for k in keys})
-            if ref(t, "retweeted"):
-                kind = "repost"
-            elif ref(t, "replied_to"):
-                kind = "reply"
-            elif ref(t, "quoted"):
-                kind = "quote"
-            else:
-                kind = "original"
-            posts[t["id"]] = {"created": t.get("created_at"), "kind": kind, "text": (t.get("text") or "")[:280],
-                              "media": types, "media_keys": keys, "metrics": t.get("public_metrics") or {},
-                              "quoted": ref(t, "quoted"), "reposted": ref(t, "retweeted"),
-                              "metrics_at": iso(now_utc()),
-                              "settled": bool(t.get("created_at")) and (now_utc() - ts(t["created_at"])).days >= 7}
-            if newest is None or int(t["id"]) > int(newest):
-                newest = t["id"]
-        token = (body.get("meta") or {}).get("next_token")
-        if not token or not data:
-            break
-    # refresh counts once a post is a week old, so early reads don't undercount it
+        extra = {"start_time": iso(now_utc() - timedelta(days=days))}
+    else:
+        extra = {"since_id": state["since_id"]} if state.get("since_id") else {}
+    hi, lo, done = read_timeline(extra)
+    old_since = state.get("since_id")
+    if hi and (old_since is None or int(hi) > int(old_since)):
+        state["since_id"] = hi
+    gaps = state.pop("gaps", None) or ([state.pop("gap")] if state.get("gap") else [])
+    if not done and not days:
+        if lo:
+            # posts older than lo and newer than the old since_id are still unread: remember the gap
+            gaps.append({"since_id": old_since, "until_id": lo})
+            not_read.append("older posts in this window")
+        else:
+            not_read.append("new posts")  # since_id didn't move, so the next pull starts from the same place
+    # 2. fill gaps earlier capped pulls left, newest gap first
+    left = []
+    for gap in sorted(gaps, key=lambda g: -int(g.get("until_id") or 0)):
+        if capped:
+            left.append(gap)
+            continue
+        _, glo, gdone = read_timeline({k: v for k, v in gap.items() if v})
+        if not gdone:
+            if glo:
+                gap["until_id"] = glo
+            left.append(gap)
+    if left:
+        state["gaps"] = left
+        if "older posts in this window" not in not_read:
+            not_read.append("older posts left from an earlier capped pull")
+    # 3. refresh counts once a post is a week old, so early reads don't undercount it
     stale = [i for i, x in posts.items()
              if x["kind"] == "original" and x.get("created") and not x.get("settled")
              and (now_utc() - ts(x["created"])).days >= 7]
     refreshed = 0
     for k in range(0, len(stale), 100):
-        if capped or (read + len(stale[k:k + 100])) * cfg["price_owned"] > cfg["max_cost_per_pull"]:
+        if capped or (read + len(stale[k:k + 100])) * P().RATES["owned"] > cfg["max_cost_per_pull"]:
             capped = True
+            not_read.append("view-count refresh")
             break
         chunk = stale[k:k + 100]
-        body = client.get("/tweets", {"ids": ",".join(chunk), "tweet.fields": "public_metrics"})
+        try:
+            body = client.get("/tweets", {"ids": ",".join(chunk), "tweet.fields": "public_metrics"}, owned=True)
+        except CapReached as e:
+            capped, crew_cap = True, e
+            not_read.append("view-count refresh")
+            break
         requests += 1
         got = body.get("data", []) or []
         read += len(got)
@@ -214,17 +289,23 @@ def cmd_pull(st, client, days=None):
             refreshed += 1
         for i in chunk:
             posts[i]["settled"] = True  # deleted posts come back missing, don't retry them
-    state["since_id"] = newest
     state["last_pull"] = iso(now_utc())
+    state["last_pull_not_read"] = not_read
     state.setdefault("first_pull", state["last_pull"])
     write_json(st.state_path, state, pretty=True)
     write_json(st.posts_path, posts)
     oldest = min((p["created"] for p in posts.values() if p.get("created")), default=None)
-    cost = read * cfg["price_owned"]
-    print(f"Read {read:,} posts in {requests} requests, about ${cost:.2f}"
-          f"{' (cap reached, the rest come next pull)' if capped else ''}.")
+    cost = read * P().RATES["owned"]
+    # read and requests start at 1 for the account check, which is not a post
+    print(f"Read {read - 1:,} posts in {requests - 1} timeline requests, plus the account check, about ${cost:.2f}.")
+    if not_read:
+        which = "the crew's daily cap" if crew_cap else "this pull's cost cap"
+        print(f"{client.who} stopped before {not_read[0]}, cap reached ({which}). Not read this pull: "
+              f"{', '.join(not_read)}. They come next pull." + (f" {crew_cap}" if crew_cap else ""))
     print(f"History on hand: {len(posts):,} posts" + (f", back to {oldest[:10]}." if oldest else ".")
-          + f" Refreshed view counts on {refreshed} posts that just turned a week old.")
+          + (f" Refreshed view counts on {refreshed} posts that just turned a week old."
+             if "view-count refresh" not in not_read else
+             f" Refreshed view counts on {refreshed} of {len(stale)} posts due; the rest wait for the cap."))
 
 
 def median_for(created, originals, window_days):
@@ -242,6 +323,9 @@ def cmd_pick(st):
     posts = st.posts()
     shown = st.shown()
     me = state["me"]["username"]
+    if state.get("last_pull_not_read") or state.get("gaps"):
+        print(f"Note: the last pull stopped before {(state.get('last_pull_not_read') or ['older posts'])[0]}, "
+              "cap reached, so some posts aren't in the history yet. Picks come from what is on hand.")
     now = now_utc()
     lt = local_now(cfg)
     today = lt.date()
@@ -412,6 +496,9 @@ def cmd_status(st):
     print(f"Last pull: {s.get('last_pull', 'never')}. Posts: {len(p):,} (" +
           ", ".join(f"{k} {n}" for k, n in sorted(kinds.items())) + ")")
     print(f"Shown as picks so far: {len(st.shown())}")
+    if s.get("last_pull_not_read"):
+        print(f"Last pull stopped before {s['last_pull_not_read'][0]}, cap reached. "
+              f"Not read: {', '.join(s['last_pull_not_read'])}.")
 
 
 def main(argv=None):
@@ -427,7 +514,13 @@ def main(argv=None):
         fws = fw.Store(st.cfg["follow_watch_dir"])
         fwc = fws.load_config()
         client = fw.XClient(fws, fwc, fw.Meter({**fwc, "max_resources_per_run": 10 ** 9}))
-        cmd_pull(st, client, a.days)
+        global CapReached
+        CapReached = fw.CapReached
+        try:
+            cmd_pull(st, client, a.days)
+        except fw.CapReached as e:  # stopped at the account check: nothing was read or saved
+            print(f"{client.who} stopped before {e.label}, cap reached. Nothing was read or saved this pull. {e}")
+            sys.exit(3)
     elif a.command == "pick":
         cmd_pick(st)
     elif a.command == "render":

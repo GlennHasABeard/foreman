@@ -4,8 +4,14 @@ follow_watch.py
 Read-only tracker for an X account's followers and following.
 
 Commands
-  auth    One-time sign-in. Requests read-only scopes (tweet.read users.read
-          follows.read offline.access) and saves a refreshable token.
+  auth    One-time sign-in for the whole crew. Requests read-only scopes (tweet.read
+          users.read follows.read offline.access, plus like.read with --likes) and
+          saves one refreshable sign-in at $BOTS_HOME/dispatch/x_signin.json, owned by
+          Dispatch and shared by every bot. Main path: approve in the bot's own browser,
+          which comes back to the local listener. Backup: paste the address the browser
+          landed on (`auth-paste '<address>'`, or stdin with --paste). The code is
+          swapped the moment it arrives; X gives about 30 seconds.
+  auth-paste  Hand a pasted address to the sign-in that is waiting.
   full    Pull the complete follower and following lists, compare with the last
           full scan, log who followed, unfollowed, followed back or disappeared,
           score every account for fake, spam and inactivity signals, write a report.
@@ -24,6 +30,12 @@ Commands
           the next day. Unfollows are counted only. Names come with the monthly full scan.
   report  Rebuild the latest full report from saved data. No API calls.
 
+Every run needs CREW_BOT set to the calling bot's name (for example
+CREW_BOT="Follow Audit"). There is no default; without it nothing is sent.
+Each request is booked to that bot in the shared spend ledger, under a file
+lock, before the next request is made. A run the cap stops says
+"stopped before <what>, cap reached" and never reports a made-up 0.
+
 What it never does
   It sends no follow, unfollow, block, mute, like, post, reply, DM or list request.
   Every X API call is a GET, except the OAuth token exchange and refresh.
@@ -35,11 +47,14 @@ Python 3.9+ standard library only.
 
 import argparse
 import base64
+import contextlib
 import csv
+import fcntl
 import hashlib
 import http.server
 import json
 import os
+import queue
 import re
 import secrets
 import sys
@@ -49,6 +64,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import x_prices  # noqa: E402  the crew's one price table
 
 try:
     from zoneinfo import ZoneInfo
@@ -81,9 +99,6 @@ DEFAULT_CONFIG = {
     "daily_page_size": 20,
     "light_max_pages": 5,
     "light_stop_after_known": 5,
-    "cost_per_owned_resource": 0.001,
-    "cost_per_lookup_resource": 0.010,
-    "cost_per_post_resource": 0.005,
     "recheck_max_cost": 5.00,
     "recheck_skip_days": 7,
     "report_rows_per_section": 40,
@@ -126,7 +141,6 @@ class Store:
         self.config_path = os.path.join(root, "config.json")
         self.state_path = os.path.join(self.data, "state.json")
         self.events_path = os.path.join(self.data, "events.csv")
-        self.token_path = os.path.join(self.data, "token.json")
 
     def load_config(self):
         cfg = dict(DEFAULT_CONFIG)
@@ -216,13 +230,48 @@ class Meter:
                 f"({self.cfg['max_resources_per_run']}). Raise it in config.json if expected.")
 
     def cost(self):
-        return (self.owned * self.cfg["cost_per_owned_resource"]
-                + self.lookup * self.cfg["cost_per_lookup_resource"]
-                + self.posts * self.cfg["cost_per_post_resource"])
+        return x_prices.estimate(owned=self.owned, user=self.lookup, post=self.posts)
+
+
+# ----------------------------------------------------------------------------
+# Which bot is calling. Every X request is booked to it in the shared ledger.
+# ----------------------------------------------------------------------------
+
+CREW_BOTS = ("Dispatch", "Foreman", "Follow Audit", "Follow Finder", "Shoutout Picker",
+             "Reply Queue", "Fan Finder", "Rerun Picker", "Analytics Log")
+
+
+def crew_bot():
+    """The calling bot's name, from CREW_BOT. There is no default: a missing or unknown name
+    stops the run before anything is sent, so the ledger can never book one bot's reads to another."""
+    name = (os.environ.get("CREW_BOT") or "").strip()
+    if not name:
+        raise SystemExit("CREW_BOT is not set, so this run can't be booked to the right bot. Nothing was sent "
+                         "to X. Run it as, for example: CREW_BOT=\"Follow Audit\" python3 follow_watch.py daily")
+    if name not in CREW_BOTS:
+        raise SystemExit(f"CREW_BOT is set to {name!r}, which is not a crew bot. Nothing was sent to X. "
+                         f"Use one of: {', '.join(CREW_BOTS)}.")
+    return name
+
+
+@contextlib.contextmanager
+def file_lock(path):
+    """Exclusive lock on path + '.lock' (fcntl.flock). Not re-entrant: never nest two locks on the same path."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    fd = os.open(path + ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 # ----------------------------------------------------------------------------
 # Daily spend cap. One ledger for the whole crew, so every bot shares the cap.
+# Every request is reserved at its worst case under the ledger lock before it is
+# sent, and settled to what it likely cost right after, so concurrent bots can't
+# overrun the cap or lose each other's writes.
 # ----------------------------------------------------------------------------
 
 def ledger_path():
@@ -239,6 +288,7 @@ def crew_now(tz):
 
 
 def ledger_today(cfg):
+    """(today, ledger, path). Read only. Callers that write must hold file_lock(ledger_path())."""
     tz = ZoneInfo(cfg["timezone"]) if ZoneInfo and cfg.get("timezone") else timezone.utc
     day = crew_now(tz).date().isoformat()
     path = ledger_path()
@@ -249,26 +299,39 @@ def ledger_today(cfg):
     return day, book, path
 
 
-def ledger_add(cfg, amount, who):
-    if amount <= 0:
-        return
-    day, book, path = ledger_today(cfg)
+def _book_into(book, day, amount, who, request=False):
     e = book.setdefault(day, {"total": 0.0, "by_bot": {}})
-    e["total"] = round(e["total"] + amount, 4)
-    e["by_bot"][who] = round(e["by_bot"].get(who, 0.0) + amount, 4)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    write_json(path, book)
+    e.setdefault("by_bot", {})
+    e["total"] = round(max(0.0, e.get("total", 0.0) + amount), 4)
+    e["by_bot"][who] = round(max(0.0, e["by_bot"].get(who, 0.0) + amount), 4)
+    if request:
+        reqs = e.setdefault("requests", {})
+        reqs[who] = reqs.get(who, 0) + 1
+
+
+def ledger_add(cfg, amount, who, day=None):
+    """Book amount (may be negative to release a reservation) under the ledger lock."""
+    if not amount:
+        return
+    with file_lock(ledger_path()):
+        today, book, path = ledger_today(cfg)
+        _book_into(book, day or today, amount, who)
+        write_json(path, book)
+
+
+def _cap_for(cfg, book, day):
+    raise_ = (book.get(day) or {}).get("cap_raise") or {}
+    amount = raise_.get("amount")
+    if isinstance(amount, (int, float)) and amount > cfg["daily_spend_cap"]:
+        return float(amount)
+    return float(cfg["daily_spend_cap"])
 
 
 def effective_cap(cfg):
     """Today's cap. A one-day raise confirmed through Dispatch (spend.py raise) is saved under
     today's date in the ledger, so it ends at midnight in the owner's timezone by itself."""
     day, book, _ = ledger_today(cfg)
-    raise_ = (book.get(day) or {}).get("cap_raise") or {}
-    amount = raise_.get("amount")
-    if isinstance(amount, (int, float)) and amount > cfg["daily_spend_cap"]:
-        return float(amount)
-    return cfg["daily_spend_cap"]
+    return _cap_for(cfg, book, day)
 
 
 def spent_today(cfg):
@@ -276,134 +339,243 @@ def spent_today(cfg):
     return (book.get(day) or {}).get("total", 0.0)
 
 
-def worst_case(cfg, path, params):
-    """The most one request could cost, priced the way the Meter prices it."""
-    params = params or {}
-    n = int(params.get("max_results") or 0)
-    for key in ("ids", "usernames"):
-        if key in params:
-            n = len(str(params[key]).split(","))
-    n = max(n, 1)
-    if path.startswith("/users/me") or path.startswith("/users/by") or path == "/users":
-        return n * cfg["cost_per_lookup_resource"]
-    if path.endswith("/followers") or path.endswith("/following"):
-        return n * cfg["cost_per_owned_resource"]
-    return n * max(cfg["cost_per_post_resource"], cfg["cost_per_owned_resource"])
+def worst_case(cfg, path, params, owner_id=None, owned=None):
+    """The most one request could cost, from the shared price table (x_prices.py).
+    Attached author profiles are not in this worst case. The settle step books them right
+    after, so a run can pass the cap by one page."""
+    return x_prices.worst_case(path, params, owner_id, owned)
 
 
-def response_cost(cfg, path, body):
-    """What one response likely cost: items returned, plus attached profiles, at the config rates."""
-    data = body.get("data") if isinstance(body, dict) else None
-    n = len(data) if isinstance(data, list) else (1 if data else 0)
-    users = len(((body.get("includes") or {}).get("users")) or []) if isinstance(body, dict) else 0
-    if path.startswith("/users/me") or path.startswith("/users/by") or path == "/users":
-        return n * cfg["cost_per_lookup_resource"]
-    if path.endswith("/followers") or path.endswith("/following"):
-        return n * cfg["cost_per_owned_resource"]
-    return n * max(cfg["cost_per_post_resource"], cfg["cost_per_owned_resource"]) + users * cfg["cost_per_lookup_resource"]
+def response_cost(cfg, path, body, owner_id=None, owned=None):
+    """What one response likely cost, from the shared price table (x_prices.py)."""
+    return x_prices.response_cost(path, body, owner_id, owned)
+
+
+def owner_path():
+    return os.path.join(BOTS_HOME, "dispatch", "owner.json")
+
+
+def read_owner_id():
+    try:
+        with open(owner_path(), encoding="utf-8") as f:
+            return str(json.load(f).get("id") or "") or None
+    except Exception:
+        return None
+
+
+def what_for(path):
+    """Plain name for what a request reads, for 'stopped before ..., cap reached' messages."""
+    p = path.split("?")[0]
+    for end, label in (("/users/me", "the account check"), ("/followers", "followers"),
+                       ("/following", "following"), ("/mentions", "mentions"),
+                       ("/liked_tweets", "your likes"), ("/quote_tweets", "quote posts"),
+                       ("/liking_users", "likers"), ("/tweets/search/recent", "search")):
+        if p.endswith(end):
+            return label
+    if re.fullmatch(r"/users/[^/]+/tweets", p):
+        return "posts"
+    if p == "/tweets":
+        return "post lookups"
+    if p in ("/users", "/users/by"):
+        return "profile lookups"
+    return p
+
+
+class CapReached(SystemExit):
+    """A request was stopped before it was sent because it could pass today's cap.
+    Subclass of SystemExit, so a bot that doesn't catch it still stops with this message."""
+
+    def __init__(self, path, spent, worst, cap):
+        self.path, self.label, self.spent, self.worst, self.cap = path, what_for(path), spent, worst, cap
+        super().__init__(f"Stopped before {self.label}, cap reached. Today's spend is ${spent:.2f} and the next "
+                         f"request could cost up to ${worst:.2f}, which would pass today's cap of ${cap:.2f}. "
+                         "Nothing past this point was read.")
+
+
+def stopped_line(bot, e):
+    """The one-line honest result for a run the cap stopped."""
+    return f"{bot} stopped before {e.label}, cap reached. {e}"
+
+
+# ----------------------------------------------------------------------------
+# Shared X sign-in. ONE file for the whole crew, owned by Dispatch:
+#   $BOTS_HOME/dispatch/x_signin.json  (owner-only permissions)
+# Renewal takes a file lock, so one bot renews while the others wait, then they
+# re-read the new file. Nothing ever copies this file. A failed renewal stops the
+# bot with SIGNIN_REDO. The app's client id and secret come only from stored
+# secrets (X_CLIENT_ID, X_CLIENT_SECRET) and are never written to the file.
+# ----------------------------------------------------------------------------
+
+SIGNIN_REDO = "X sign-in needs to be redone"
+SIGNIN_KEYS = ("access_token", "refresh_token", "expires_at", "scope", "saved_at")
+
+
+def signin_path():
+    return os.path.join(BOTS_HOME, "dispatch", "x_signin.json")
+
+
+def read_signin():
+    p = signin_path()
+    if not os.path.exists(p):
+        return {}
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_signin(tok):
+    keep = {k: tok[k] for k in SIGNIN_KEYS if k in tok}
+    os.makedirs(os.path.dirname(signin_path()), exist_ok=True)
+    write_json(signin_path(), keep, private=True)
+
+
+def expiring(tok, margin=120):
+    return not tok.get("access_token") or time.time() > float(tok.get("expires_at", 0)) - margin
 
 
 class XClient:
     def __init__(self, store, cfg, meter):
+        self.who = crew_bot()  # fails closed before anything else
         self.store = store
         self.cfg = cfg
         self.meter = meter
-        self.tok = self._load_token()
+        self.app = {k: os.environ.get(env) for k, env in (("client_id", "X_CLIENT_ID"),
+                                                          ("client_secret", "X_CLIENT_SECRET"))}
+        self.tok = read_signin()
+        self.owner_id = read_owner_id()  # your account id, so reads of your own data bill as owned
         self._booked = 0.0
         self._charged = 0.0
-        self.who = os.environ.get("BOT_NAME", "Follow Audit")
         import atexit
         atexit.register(self._book)
 
-    def _book(self):
+    # --- spend ---------------------------------------------------------------
+
+    def _target(self):
         # the larger of what the caller metered and what the responses held
-        new = max(self.meter.cost(), self._charged) - self._booked
-        if new > 0:
+        return max(self.meter.cost(), self._charged)
+
+    def _book(self):
+        """Book anything metered but not yet in the ledger. Runs before every request and at exit."""
+        new = self._target() - self._booked
+        if new > 1e-9:
             ledger_add(self.cfg, new, self.who)
             self._booked += new
 
-    def _load_token(self):
-        tok = {}
-        if os.path.exists(self.store.token_path):
-            with open(self.store.token_path, encoding="utf-8") as f:
-                tok = json.load(f)
-        for key, env in (("client_id", "X_CLIENT_ID"), ("client_secret", "X_CLIENT_SECRET"),
-                         ("bearer_token", "X_BEARER_TOKEN")):
-            if os.environ.get(env):
-                tok[key] = os.environ[env]
-        for key, env in (("access_token", "X_ACCESS_TOKEN"), ("refresh_token", "X_REFRESH_TOKEN")):
-            if os.environ.get(env) and not tok.get(key):
-                tok[key] = os.environ[env]
-        return tok
+    def _reserve(self, path, params, owned=None):
+        """Under the ledger lock: book what's pending, check the cap, then reserve this request's
+        worst case so a bot running at the same moment sees it. Returns (day, worst)."""
+        worst = worst_case(self.cfg, path, params, self.owner_id, owned)
+        with file_lock(ledger_path()):
+            day, book, lpath = ledger_today(self.cfg)
+            pending = self._target() - self._booked
+            if pending > 1e-9:
+                _book_into(book, day, pending, self.who)
+                self._booked += pending
+            cap = _cap_for(self.cfg, book, day)
+            spent = (book.get(day) or {}).get("total", 0.0)
+            if spent + worst > cap + 1e-9:
+                if pending > 1e-9:
+                    write_json(lpath, book)
+                raise CapReached(path, spent, worst, cap)
+            _book_into(book, day, worst, self.who, request=True)
+            write_json(lpath, book)
+        self._booked += worst
+        return day, worst
 
-    def _save_token(self):
-        keep = {k: v for k, v in self.tok.items() if k != "bearer_token"}
-        write_json(self.store.token_path, keep, private=True)
+    def _settle(self, day):
+        """Right after a response (or a failed send): swap the reservation for the likely cost."""
+        delta = self._target() - self._booked
+        if abs(delta) > 1e-9:
+            ledger_add(self.cfg, delta, self.who, day=day)
+            self._booked += delta
 
-    def _token_post(self, fields):
+    # --- sign-in -------------------------------------------------------------
+
+    def _token_request(self, fields):
+        """POST to the token endpoint. Returns the JSON body or raises urllib.error.HTTPError/URLError."""
         data = urllib.parse.urlencode(fields).encode()
         req = urllib.request.Request(TOKEN_URL, data=data, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
-        if self.tok.get("client_secret"):
+        if self.app.get("client_secret"):
             basic = base64.b64encode(
-                f"{self.tok['client_id']}:{self.tok['client_secret']}".encode()).decode()
+                f"{self.app['client_id']}:{self.app['client_secret']}".encode()).decode()
             req.add_header("Authorization", "Basic " + basic)
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                body = json.load(r)
-        except urllib.error.HTTPError as e:
-            raise SystemExit(f"Token request failed ({e.code}): {e.read().decode(errors='replace')}")
-        self.tok["access_token"] = body["access_token"]
-        if body.get("refresh_token"):
-            self.tok["refresh_token"] = body["refresh_token"]
-        self.tok["expires_at"] = time.time() + int(body.get("expires_in", 7200))
-        self.tok["scope"] = body.get("scope", "")
-        self._save_token()
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
 
-    def refresh(self):
-        if not (self.tok.get("refresh_token") and self.tok.get("client_id")):
-            return False
-        self._token_post({"grant_type": "refresh_token",
-                          "refresh_token": self.tok["refresh_token"],
-                          "client_id": self.tok["client_id"]})
-        return True
+    def _keep(self, body, old_refresh=None):
+        tok = {"access_token": body["access_token"],
+               "refresh_token": body.get("refresh_token") or old_refresh,
+               "expires_at": time.time() + int(body.get("expires_in", 7200)),
+               "scope": body.get("scope", ""),
+               "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        write_signin(tok)
+        self.tok = tok
+
+    def renew(self, used=None, force=False):
+        """Make sure self.tok holds a usable access token. Takes the sign-in lock. If another bot
+        renewed while this one waited (the file's token differs from `used`), it just reads the new
+        file. Otherwise it renews once and writes the file. Any failure: SIGNIN_REDO."""
+        with file_lock(signin_path()):
+            disk = read_signin()
+            if not disk:
+                raise SystemExit(f"{SIGNIN_REDO}. No sign-in found at {signin_path()}. "
+                                 "Foreman runs `follow_watch.py auth` once for the whole crew.")
+            fresh_from_other = disk.get("access_token") and disk.get("access_token") != used
+            if not expiring(disk) and (fresh_from_other or not force):
+                self.tok = disk
+                return
+            if not (disk.get("refresh_token") and self.app.get("client_id")):
+                raise SystemExit(SIGNIN_REDO)
+            try:
+                body = self._token_request({"grant_type": "refresh_token",
+                                            "refresh_token": disk["refresh_token"],
+                                            "client_id": self.app["client_id"]})
+                if not body.get("access_token"):
+                    raise ValueError("no access_token in the renewal answer")
+            except urllib.error.HTTPError as e:
+                print(f"Sign-in renewal refused by X (HTTP {e.code}).", file=sys.stderr)
+                raise SystemExit(SIGNIN_REDO)
+            except Exception as e:  # network, bad JSON, missing field
+                print(f"Sign-in renewal failed ({type(e).__name__}).", file=sys.stderr)
+                raise SystemExit(SIGNIN_REDO)
+            self._keep(body, old_refresh=disk.get("refresh_token"))
 
     def _auth_header(self):
-        if self.tok.get("refresh_token") and self.tok.get("client_id"):
-            if not self.tok.get("access_token") or time.time() > self.tok.get("expires_at", 0) - 120:
-                self.refresh()
-            return "Bearer " + self.tok["access_token"]
-        if self.tok.get("access_token"):
-            return "Bearer " + self.tok["access_token"]
-        if self.tok.get("bearer_token"):
-            return "Bearer " + self.tok["bearer_token"]
-        raise SystemExit("No X credentials. Run `auth` first or set X_BEARER_TOKEN.")
+        if expiring(self.tok):
+            self.renew(used=self.tok.get("access_token"))
+        return "Bearer " + self.tok["access_token"]
 
-    def get(self, path, params=None):
-        self._book()
-        cap = effective_cap(self.cfg)
-        worst = worst_case(self.cfg, path, params)
-        if spent_today(self.cfg) + worst > cap:
-            raise SystemExit(f"Stopped before {path}: today's spend is ${spent_today(self.cfg):.2f} and this "
-                             f"request could cost up to ${worst:.2f}, which would pass today's cap of ${cap:.2f}.")
+    # --- requests ------------------------------------------------------------
+
+    def get(self, path, params=None, refused_ok=False, owned=None):
+        """GET through the cap. refused_ok: return None instead of stopping when X refuses this one
+        item (protected, suspended, gone). 402 (out of credits) always stops.
+        owned: True when a /tweets?ids= lookup reads your own posts, so it bills as owned."""
         url = API + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
-        refreshed = False
+        renewed = False
         for attempt in range(6):
+            header = self._auth_header()
+            day, _ = self._reserve(path, params, owned)
             req = urllib.request.Request(url, method="GET")
-            req.add_header("Authorization", self._auth_header())
+            req.add_header("Authorization", header)
             req.add_header("User-Agent", "follow-watch/1.0")
             try:
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    body = json.load(r)
-                self._charged += response_cost(self.cfg, path, body)
-                self._book()
-                return body
+                try:
+                    with urllib.request.urlopen(req, timeout=60) as r:
+                        body = json.load(r)
+                    if path.split("?")[0] == "/users/me":
+                        self._learn_owner(body)
+                    self._charged += response_cost(self.cfg, path, body, self.owner_id, owned)
+                    return body
+                finally:
+                    self._settle(day)
             except urllib.error.HTTPError as e:
-                body = e.read().decode(errors="replace")
-                if e.code == 401 and not refreshed and self.refresh():
-                    refreshed = True
+                text = e.read().decode(errors="replace")
+                if e.code == 401 and not renewed:
+                    renewed = True
+                    self.renew(used=header[len("Bearer "):], force=True)
                     continue
                 if e.code == 429:
                     reset = e.headers.get("x-rate-limit-reset")
@@ -415,13 +587,26 @@ class XClient:
                 if 500 <= e.code < 600 and attempt < 5:
                     time.sleep(2 ** attempt * 3)
                     continue
-                raise SystemExit(f"X API error {e.code} on {path}: {body}")
+                if e.code == 402:
+                    raise SystemExit("X API error 402: out of credits. Nothing else was changed.")
+                if refused_ok and e.code in (400, 403, 404):
+                    return None
+                raise SystemExit(f"X API error {e.code} on {path}: {text}")
             except urllib.error.URLError as e:
                 if attempt < 5:
                     time.sleep(2 ** attempt * 3)
                     continue
+                if refused_ok:
+                    return None
                 raise SystemExit(f"Network error on {path}: {e}")
         raise SystemExit(f"Gave up on {path} after retries")
+
+    def _learn_owner(self, body):
+        uid = str(((body or {}).get("data") or {}).get("id") or "")
+        if uid and uid != self.owner_id:
+            self.owner_id = uid
+            os.makedirs(os.path.dirname(owner_path()), exist_ok=True)
+            write_json(owner_path(), {"id": uid})
 
     # --- endpoints -----------------------------------------------------------
 
@@ -430,10 +615,12 @@ class XClient:
         self.meter.add("lookup", 1)
         return body["data"]
 
-    def list_all(self, uid, kind):
+    def list_all(self, uid, kind, limit=None):
+        """Every account in the list, or only the first `limit` (newest first) for a partial scan."""
         users, token = [], None
         while True:
-            params = {"max_results": 1000, "user.fields": USER_FIELDS}
+            want = 1000 if not limit else max(1, min(1000, limit - len(users)))
+            params = {"max_results": want, "user.fields": USER_FIELDS}
             if token:
                 params["pagination_token"] = token
             body = self.get(f"/users/{uid}/{kind}", params)
@@ -441,6 +628,8 @@ class XClient:
             self.meter.add("owned", len(page))
             users.extend(page)
             token = (body.get("meta") or {}).get("next_token")
+            if limit and len(users) >= limit:
+                return users[:limit]
             if not token:
                 return users
 
@@ -468,45 +657,15 @@ class XClient:
         return fresh, False
 
     def recent_posts(self, uid, start_time):
-        """Newest posts (replies and reposts included) since start_time.
-        Returns a list, or None if X refuses (protected, suspended, gone)."""
+        """Newest posts (replies and reposts included) since start_time. Goes through the cap like
+        every other read. Returns a list, or None if X refuses (protected, suspended, gone)."""
         params = {"max_results": 5, "start_time": start_time, "tweet.fields": "created_at"}
-        url = API + f"/users/{uid}/tweets?" + urllib.parse.urlencode(params)
-        refreshed = False
-        for attempt in range(6):
-            req = urllib.request.Request(url, method="GET")
-            req.add_header("Authorization", self._auth_header())
-            req.add_header("User-Agent", "follow-watch/1.0")
-            try:
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    body = json.load(r)
-                page = body.get("data", []) or []
-                self.meter.add("post", len(page))
-                return page
-            except urllib.error.HTTPError as e:
-                e.read()
-                if e.code == 401 and not refreshed and self.refresh():
-                    refreshed = True
-                    continue
-                if e.code == 429:
-                    reset = e.headers.get("x-rate-limit-reset")
-                    wait = max(5, int(reset) - int(time.time()) + 2) if reset else 60
-                    wait = min(wait, 960)
-                    print(f"Rate limited, waiting {wait}s", file=sys.stderr)
-                    time.sleep(wait)
-                    continue
-                if 500 <= e.code < 600 and attempt < 5:
-                    time.sleep(2 ** attempt * 3)
-                    continue
-                if e.code == 402:
-                    raise SystemExit("X API error 402: out of credits. Nothing else was changed.")
-                return None
-            except urllib.error.URLError:
-                if attempt < 5:
-                    time.sleep(2 ** attempt * 3)
-                    continue
-                return None
-        return None
+        body = self.get(f"/users/{uid}/tweets", params, refused_ok=True)
+        if body is None:
+            return None
+        page = body.get("data", []) or []
+        self.meter.add("post", len(page))
+        return page
 
     def lookup(self, ids):
         """Returns (found {id: user}, gone {id: reason})."""
@@ -671,18 +830,26 @@ def span(today, since, baseline):
     return (today - d(since)).days, bool(baseline)
 
 
-def cmd_full(store, cfg, client, now):
+def cmd_full(store, cfg, client, now, limit=None):
+    """limit: read only the first N followers and first N following (newest first). The scan is
+    saved as PARTIAL: it never becomes the baseline and never marks unseen accounts as unfollows."""
     today, ts = now.date(), now.astimezone(timezone.utc).isoformat(timespec="seconds")
     me = client.me()
     uid = me["id"]
-    print(f"Reading followers of @{me['username']}...", file=sys.stderr)
-    followers = client.list_all(uid, "followers")
-    print(f"Reading accounts @{me['username']} follows...", file=sys.stderr)
-    following = client.list_all(uid, "following")
+    print(f"Reading followers of @{me['username']}" + (f" (first {limit} only)" if limit else "") + "...", file=sys.stderr)
+    followers = client.list_all(uid, "followers", limit)
+    print(f"Reading accounts @{me['username']} follows" + (f" (first {limit} only)" if limit else "") + "...", file=sys.stderr)
+    following = client.list_all(uid, "following", limit)
+    pm = me.get("public_metrics") or {}
+    partial = bool(limit) and (len(followers) < pm.get("followers_count", 0)
+                               or len(following) < pm.get("following_count", 0))
 
     state = store.load_state()
     accounts = state.setdefault("accounts", {})
     first = not state.get("baseline_date")
+    if partial:
+        prev_fol0 = {i for i, a in accounts.items() if a.get("follower_now")}
+        prev_fing0 = {i for i, a in accounts.items() if a.get("following_now")}
     fol_ids = {u["id"] for u in followers}
     fing_ids = {u["id"] for u in following}
     prev_fol = {i for i, a in accounts.items() if a.get("follower_now")}
@@ -695,7 +862,17 @@ def cmd_full(store, cfg, client, now):
         acc.pop("gone", None)
 
     events = []
-    if first:
+    if partial:
+        # Partial: record who was seen, add nothing as lost, start no clocks as a baseline.
+        for i in {u["id"] for u in followers}:
+            accounts[i].setdefault("follower_since", None)
+        fol_ids = fol_ids | prev_fol0
+        fing_ids = fing_ids | prev_fing0
+        for i in {u["id"] for u in followers}:
+            accounts[i]["follower_now"] = True
+        for i in {u["id"] for u in following}:
+            accounts[i]["following_now"] = True
+    elif first:
         state["baseline_date"] = today.isoformat()
         for i in fol_ids:
             accounts[i].update(follower_now=True, follower_since=today.isoformat(), follower_baseline=True)
@@ -767,11 +944,18 @@ def cmd_full(store, cfg, client, now):
     state["me"] = slim(me)
     summary = summarize(accounts, cfg, today)
     state["last_full"] = {"ts": ts, "date": today.isoformat(), "summary": summary}
+    if partial:
+        state["last_full"].update(partial=True, limit=limit, read={"followers": len(followers),
+                                  "following": len(following)}, real_counts={"followers": pm.get("followers_count"),
+                                  "following": pm.get("following_count")})
+        print(f"PARTIAL scan: read the first {len(followers)} of {pm.get('followers_count')} followers and the "
+              f"first {len(following)} of {pm.get('following_count')} following. Counts below cover only those. "
+              "This is not a baseline and no unfollows were worked out from it.", file=sys.stderr)
     state["last_me_counts"] = (me.get("public_metrics") or {})
     state["last_run"] = {"ts": ts, "kind": "full"}
     store.save_state(state)
     store.append_events(events)
-    write_json(os.path.join(store.snapshots, f"{today.isoformat()}_{now.strftime('%H%M')}.json"),
+    write_json(os.path.join(store.snapshots, f"{today.isoformat()}_{now.strftime('%H%M')}" + ("_partial" if partial else "") + ".json"),
                {"followers": sorted(fol_ids), "following": sorted(fing_ids)})
 
     path = build_full_report(store, cfg, state, now, client.meter, first)
@@ -912,7 +1096,14 @@ def build_full_report(store, cfg, state, now, meter, first):
 
     L = [f"# Follow Audit: full scan for @{me.get('username', '')}, {now.strftime('%a %b %d, %Y %I:%M %p')}",
          "", "Read-only run. Nothing was followed, unfollowed, blocked, muted or removed.", ""]
-    if first:
+    lf = state.get("last_full") or {}
+    if lf.get("partial"):
+        r, rc = lf.get("read") or {}, lf.get("real_counts") or {}
+        L += [f"**PARTIAL SCAN (--limit {lf.get('limit')}).** Read only the first {r.get('followers')} of "
+              f"{rc.get('followers')} followers and the first {r.get('following')} of {rc.get('following')} following. "
+              "Every count and list below covers only those accounts. It is not a baseline and no unfollows "
+              "were worked out from it.", ""]
+    elif first:
         L += [f"This is the baseline. Follow-back clocks start today ({today.isoformat()}) for every account "
               "you already follow, so their waiting time shows as a minimum (for example 30+ days). "
               "Unfollow tracking starts with the next full scan.", ""]
@@ -1065,7 +1256,7 @@ def build_full_report(store, cfg, state, now, meter, first):
 
     L += ["## Run cost", "",
           f"Read {meter.owned:,} follower and following records and {meter.lookup:,} profile lookups. "
-          f"Estimated ${meter.cost():.2f} at the rates in config.json. "
+          f"Estimated ${meter.cost():.2f} at the rates in x_prices.py. "
           "Check the X developer console for the billed amount.", ""]
 
     name = f"{today.isoformat()}_full.md"
@@ -1113,7 +1304,7 @@ def cmd_recheck(store, cfg, client, now, followers_too, estimate):
     if not state.get("last_full"):
         raise SystemExit("No full scan saved yet.")
     targets = recheck_targets(state, cfg, today, followers_too)
-    worst = len(targets) * 5 * cfg["cost_per_post_resource"]
+    worst = len(targets) * 5 * x_prices.RATES["post"]
     side = "accounts you follow and your followers" if followers_too else "accounts you follow"
     print(f"Flagged inactive or dormant, not checked in the last {cfg['recheck_skip_days']} days: "
           f"{len(targets):,} ({side}).")
@@ -1124,12 +1315,17 @@ def cmd_recheck(store, cfg, client, now, followers_too, estimate):
     start = (datetime.now(timezone.utc) - timedelta(days=cfg["inactive_days"])).strftime("%Y-%m-%dT%H:%M:%SZ")
     checked = active = refused = 0
     stopped = False
+    cap_stop = None
     revived = []
     for i, a, info in targets:
-        if client.meter.cost() + 5 * cfg["cost_per_post_resource"] > cfg["recheck_max_cost"]:
+        if client.meter.cost() + 5 * x_prices.RATES["post"] > cfg["recheck_max_cost"]:
             stopped = True
             break
-        posts = client.recent_posts(i, start)
+        try:
+            posts = client.recent_posts(i, start)
+        except CapReached as e:
+            cap_stop = e
+            break
         checked += 1
         a["activity_checked"] = today.isoformat()
         if posts is None:
@@ -1156,6 +1352,9 @@ def cmd_recheck(store, cfg, client, now, followers_too, estimate):
     if stopped:
         print(f"Stopped at the ${cfg['recheck_max_cost']:.2f} cap with {len(targets) - checked:,} left. "
               "Run recheck again to continue. Checked accounts are skipped.")
+    if cap_stop:
+        print(f"{stopped_line(client.who, cap_stop)} {len(targets) - checked:,} accounts were not checked. "
+              "Run recheck again after midnight or after a one-day raise. Checked accounts are skipped.")
     print(f"Report rebuilt: {path}")
 
 
@@ -1207,69 +1406,193 @@ def write_csv(path, rows):
 
 
 # ----------------------------------------------------------------------------
-# One-time OAuth 2.0 sign-in (PKCE)
+# One-time OAuth 2.0 sign-in (PKCE) for the whole crew
+#
+# Main path: the owner approves in the bot's own browser (on this computer). X sends
+# that browser back to redirect_uri, where this script is already listening, and the
+# code is swapped for a sign-in the moment it arrives.
+# Backup: if that page can't load, the owner copies the full address from the address
+# bar and pastes it to Foreman, who hands it to this same waiting script with
+#   python3 follow_watch.py auth-paste '<address>'
+# (or types it on stdin with --paste). The waiting script swaps it at once. X's code
+# only lives about 30 seconds, so the swap can't wait for anything else.
 # ----------------------------------------------------------------------------
 
-def cmd_auth(store, cfg, client, paste):
-    if not client.tok.get("client_id"):
-        raise SystemExit("Set X_CLIENT_ID (and X_CLIENT_SECRET for a confidential app) first.")
+PASTE_WAIT_SECONDS = 600
+
+
+def paste_inbox():
+    """Named pipe the waiting sign-in reads pasted addresses from. Exists only while auth waits."""
+    return os.path.join(BOTS_HOME, "dispatch", ".signin_paste")
+
+
+def cmd_auth_paste(address):
+    """Hand a pasted redirect address to the sign-in that is waiting. Never stores it."""
+    p = paste_inbox()
+    try:
+        fd = os.open(p, os.O_WRONLY | os.O_NONBLOCK)
+    except (FileNotFoundError, OSError):
+        raise SystemExit("No sign-in is waiting for an address. Start `follow_watch.py auth` again, approve, "
+                         "and paste the new address within about 30 seconds.")
+    with os.fdopen(fd, "w") as f:
+        f.write(address.strip() + "\n")
+    print("Handed to the waiting sign-in.")
+
+
+def wait_for_redirect(redirect, st, stdin_paste, timeout=PASTE_WAIT_SECONDS, ready=None):
+    """Wait on every path at once and return the first query (dict of lists) that carries our state.
+    Paths: the local listener on redirect_uri, the paste pipe, and stdin when stdin_paste is set."""
+    got = queue.Queue()
+
+    def offer(address, source):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(address.strip()).query)
+        if (q.get("state") or [""])[0] == st and ("code" in q or "error" in q):
+            got.put((q, source))
+            return True
+        if address.strip():
+            print(f"Ignored an address from {source} that isn't this sign-in's answer.", file=sys.stderr)
+        return False
+
+    stops = []
+    parsed = urllib.parse.urlparse(redirect)
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            ok = offer("http://x" + self.path, "the browser")
+            self.send_response(200 if ok else 404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Signed in. You can close this tab." if ok else b"Not the sign-in answer.")
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        srv = http.server.ThreadingHTTPServer((parsed.hostname, parsed.port or 80), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        stops.append(lambda: (srv.shutdown(), srv.server_close()))
+        print(f"Listening on {redirect} for the browser to come back after Authorize.", flush=True)
+    except OSError as e:
+        print(f"Can't listen on {redirect} ({e}). Use the paste backup.", file=sys.stderr)
+
+    pipe = paste_inbox()
+    os.makedirs(os.path.dirname(pipe), exist_ok=True)
+    if os.path.exists(pipe):
+        os.remove(pipe)
+    os.mkfifo(pipe, 0o600)
+    done = threading.Event()
+
+    def read_pipe():
+        while not done.is_set():
+            fd = os.open(pipe, os.O_RDONLY | os.O_NONBLOCK)
+            try:
+                buf = b""
+                while not done.is_set():
+                    try:
+                        chunk = os.read(fd, 65536)
+                    except BlockingIOError:
+                        chunk = None
+                    if chunk:
+                        buf += chunk
+                        while b"\n" in buf:
+                            line, buf = buf.split(b"\n", 1)
+                            offer(line.decode(errors="replace"), "a pasted address")
+                    elif chunk == b"" and buf:
+                        offer(buf.decode(errors="replace"), "a pasted address")
+                        buf = b""
+                    time.sleep(0.05)
+            finally:
+                os.close(fd)
+    threading.Thread(target=read_pipe, daemon=True).start()
+    stops.append(lambda: os.path.exists(pipe) and os.remove(pipe))
+
+    if stdin_paste:
+        def read_stdin():
+            for line in sys.stdin:
+                if offer(line, "a pasted address"):
+                    return
+        threading.Thread(target=read_stdin, daemon=True).start()
+
+    if ready:
+        ready()
+    try:
+        return got.get(timeout=timeout)
+    except queue.Empty:
+        return None, None
+    finally:
+        done.set()
+        for s in stops:
+            try:
+                s()
+            except Exception:
+                pass
+
+
+def cmd_auth(store, cfg, client, paste, handle=None):
+    if not client.app.get("client_id"):
+        raise SystemExit("Set X_CLIENT_ID (and X_CLIENT_SECRET) as stored secrets first.")
     verifier = secrets.token_urlsafe(64)[:96]
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     st = secrets.token_urlsafe(16)
     redirect = cfg["redirect_uri"]
     url = AUTHORIZE_URL + "?" + urllib.parse.urlencode({
-        "response_type": "code", "client_id": client.tok["client_id"], "redirect_uri": redirect,
+        "response_type": "code", "client_id": client.app["client_id"], "redirect_uri": redirect,
         "scope": SCOPES, "state": st, "code_challenge": challenge, "code_challenge_method": "S256"})
-    print("Open this URL while signed in to X as the account to track, then approve:\n")
+    who = f" as {handle}" if handle else ""
+    print(f"1. Open this address in the bot's own browser, sign in to X{who} if asked, and click Authorize:\n")
     print(url + "\n")
+    print("   X sends that browser back here and the sign-in finishes by itself.")
+    print("2. Backup, only if the page after Authorize doesn't load: copy the full address from the address bar "
+          "and paste it right away. You have about 30 seconds before X's one-time code expires. "
+          "It is swapped for the sign-in the moment it is pasted. The bot hands it over with:\n"
+          f"   CREW_BOT=\"Foreman\" python3 {os.path.abspath(__file__)} auth-paste \"<the full address>\"\n",
+          flush=True)
 
-    if paste:
-        back = input("Paste the full URL the browser landed on: ").strip()
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(back).query)
-    else:
-        parsed = urllib.parse.urlparse(redirect)
-        box = {}
+    def ready():
+        print("Waiting for X (up to 10 minutes). Both ways are open now.", flush=True)
 
-        class H(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                box.update(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query))
-                self.send_response(200)
-                self.send_header("Content-Type", "text/plain")
-                self.end_headers()
-                self.wfile.write(b"Follow Audit is signed in. You can close this tab.")
-
-            def log_message(self, *a):
-                pass
-
-        srv = http.server.HTTPServer((parsed.hostname, parsed.port or 80), H)
-        t = threading.Thread(target=srv.handle_request, daemon=True)
-        t.start()
-        print(f"Waiting for the redirect on {redirect} ...")
-        t.join(timeout=600)
-        srv.server_close()
-        q = box
-    if (q.get("state") or [""])[0] != st:
-        raise SystemExit("State mismatch or no response. Run auth again.")
+    q, source = wait_for_redirect(redirect, st, paste, ready=ready)
+    if q is None:
+        raise SystemExit("No answer from X within 10 minutes. Nothing was saved. Run auth again.")
     if "error" in q:
         raise SystemExit(f"Sign-in refused: {q['error'][0]}")
-    client._token_post({"grant_type": "authorization_code", "code": q["code"][0],
-                        "redirect_uri": redirect, "code_verifier": verifier,
-                        "client_id": client.tok["client_id"]})
+    # swap at once: X's code expires in about 30 seconds
+    try:
+        with file_lock(signin_path()):
+            body = client._token_request({"grant_type": "authorization_code", "code": q["code"][0],
+                                          "redirect_uri": redirect, "code_verifier": verifier,
+                                          "client_id": client.app["client_id"]})
+            client._keep(body)
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"X refused the code (HTTP {e.code}). It most likely expired (about 30 seconds). "
+                         "Run auth again and approve in the bot's browser, or paste faster.")
+    print(f"Code from {source} swapped for a sign-in. Saved to {signin_path()} (owner-only permissions), "
+          "the one sign-in the whole crew shares.")
     me = client.me()
-    print(f"Signed in as @{me['username']}. Scopes: {client.tok.get('scope')}")
-    print(f"Token saved to {store.token_path} (owner-only permissions).")
+    pm = me.get("public_metrics") or {}
+    print(f"Signed in as @{me['username']}. Scopes: {client.tok.get('scope')}. "
+          f"Followers {pm.get('followers_count', 'n/a')}, following {pm.get('following_count', 'n/a')}.")
 
 
 # ----------------------------------------------------------------------------
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Read-only X follower and following tracker.")
-    p.add_argument("command", choices=["auth", "full", "light", "daily", "recheck", "report"])
+    p.add_argument("command", choices=["auth", "auth-paste", "full", "light", "daily", "recheck", "report"])
+    p.add_argument("address", nargs="?", help="auth-paste: the full address the browser landed on after Authorize")
     p.add_argument("--dir", default=os.environ.get("FW_DIR", BOTS_HOME + "/follow-watch"))
-    p.add_argument("--paste", action="store_true", help="auth: paste the redirect URL instead of listening")
+    p.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
+    p.add_argument("--likes", action="store_true", help="auth: add like.read (Reply Queue or Fan Finder chosen)")
     p.add_argument("--followers", action="store_true", help="recheck: include your followers, not only accounts you follow")
+    p.add_argument("--limit", type=int, help="full: read only the first N followers and N following (a partial scan, for testing)")
     p.add_argument("--estimate", action="store_true", help="recheck: count and price it without calling X")
     args = p.parse_args(argv)
+
+    if args.command == "auth-paste":
+        if not args.address:
+            raise SystemExit("auth-paste needs the full address, in quotes.")
+        cmd_auth_paste(args.address)
+        return
 
     store = Store(args.dir)
     cfg = store.load_config()
@@ -1282,18 +1605,31 @@ def main(argv=None):
             raise SystemExit("No full scan saved yet.")
         print(build_full_report(store, cfg, state, now, meter, first=not state.get("prev_full")))
         return
+    if args.command == "recheck" and args.estimate:
+        cmd_recheck(store, cfg, None, now, args.followers, True)
+        return
     client = XClient(store, cfg, meter)
     if args.command == "recheck":
-        cmd_recheck(store, cfg, client, now, args.followers, args.estimate)
+        cmd_recheck(store, cfg, client, now, args.followers, False)
         return
     if args.command == "auth":
+        global SCOPES
+        if args.likes and "like.read" not in SCOPES:
+            SCOPES = SCOPES + " like.read"
         cmd_auth(store, cfg, client, args.paste)
-    elif args.command == "full":
-        cmd_full(store, cfg, client, now)
-    elif args.command == "light":
-        cmd_light(store, cfg, client, now)
-    elif args.command == "daily":
-        cmd_daily(store, cfg, client, now)
+        return
+    try:
+        if args.command == "full":
+            cmd_full(store, cfg, client, now, args.limit)
+        elif args.command == "light":
+            cmd_light(store, cfg, client, now)
+        elif args.command == "daily":
+            cmd_daily(store, cfg, client, now)
+    except CapReached as e:
+        # nothing from this run is saved, so the last report's numbers stay as they were
+        print(stopped_line(client.who, e) + f" Nothing from this {args.command} run was saved, so no new counts "
+              "were written. The last saved report is unchanged.")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

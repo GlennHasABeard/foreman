@@ -13,7 +13,7 @@ the running records. It makes no X API calls and changes nothing on X.
 
 Every pull folder is named by its local start time and kind, for example
 pulls/2026-10-21_0732_morning. Folders and raw files are never overwritten.
-Data lives in /workspace/x-analytics (override with XA_DIR).
+Data lives in $BOTS_HOME/x-analytics (override with XA_DIR).
 Python 3.9+ standard library only.
 """
 
@@ -25,6 +25,9 @@ import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 
+
+# Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
+BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
 ROOT = os.environ.get("XA_DIR", BOTS_HOME + "/x-analytics")
 
@@ -43,9 +46,6 @@ ET = _local_tz() or timezone.utc
 TZ_LABEL = getattr(ET, "key", "UTC")
 SCHEMA = "x-analytics-pull/1"
 TWITTER_EPOCH_MS = 1288834974657
-
-# Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
-BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
 DEFAULT_CONFIG = {
     "engagement_posts": BOTS_HOME + "/engagement/posts.json",
@@ -310,6 +310,51 @@ def parse_date(raw):
         return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
     except ValueError:
         return None
+
+
+def loose_date(raw):
+    """Dates written any way X writes them: 'Aug 29, 2026', 'Aug 29 2026', '2026-08-29'."""
+    d = parse_date(raw)
+    if d:
+        return d
+    s = re.sub(r"\s+", " ", (raw or "").replace(",", " ")).strip()
+    for fmt in ("%b %d %Y", "%B %d %Y", "%a %b %d %Y", "%d %b %Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def payout_key(program, period):
+    """Same payout however X words it: 'Aug 29, 2026 - Sep 12, 2026' == 'Aug 29 2026 to Sep 12 2026'."""
+    prog = re.sub(r"[^a-z]", "", (program or "").lower())
+    parts = [x for x in re.split(r"\s+(?:-|–|—|to|through)\s+|\s*[–—]\s*", (period or "").strip()) if x.strip()]
+    dates = [loose_date(x) for x in parts]
+    if dates and all(dates):
+        per = "/".join(d.isoformat() for d in dates)
+    else:
+        per = re.sub(r"[^a-z0-9]", "", (period or "").lower())
+    return prog, per
+
+
+def dedupe_payouts(path):
+    """Collapse rows that are the same payout written two ways. Keeps the first one seen."""
+    rows = read_csv(path)
+    if not rows:
+        return rows
+    keep, seen = [], set()
+    for r in rows:
+        k = payout_key(r.get("program"), r.get("period"))
+        if k in seen:
+            continue
+        seen.add(k)
+        keep.append(r)
+    if len(keep) != len(rows):
+        with open(path, newline="", encoding="utf-8") as f:
+            header = next(csv.reader(f), [])
+        write_csv(path, header, keep)
+    return keep
 
 
 def snowflake_time(post_id):
@@ -634,6 +679,16 @@ def window_stats(rows_by_date, today, tracker, days):
             "tracker_value": tracker, "tracker_over_sum_ending_yesterday": ratio}
 
 
+def mark_complete(rows, started):
+    """X dates its daily exports in UTC. A day is complete once that UTC day has ended at pull time,
+    so a night pull's newest row (tomorrow in UTC) is partial."""
+    utc_today = started.astimezone(timezone.utc).date().isoformat()
+    for r in rows:
+        if r.get("date"):
+            r["day_complete"] = "yes" if r["date"] < utc_today else "no, partial"
+    return rows
+
+
 def merge_daily(path_latest, path_history, pid, pulled, rows, fields):
     """Daily tables: history keeps every reading, latest keeps the newest value per date."""
     fields = all_fields(rows, list(fields))
@@ -800,6 +855,7 @@ def cmd_finish(p, folder):
     by_date = {}
     if v90:
         rows, probs = parse_export(v90, OVERVIEW_FIELDS, "date")
+        mark_complete(rows, started)
         for pr in probs:
             flags.append(f"verified_90d.csv: {pr}")
         by_date = {r["date"]: r.get("impressions") for r in rows if r.get("date")}
@@ -831,6 +887,7 @@ def cmd_finish(p, folder):
             out[f"overview_{label}"] = {"status": "missing"}
             continue
         rows, probs = parse_export(f, OVERVIEW_FIELDS, "date")
+        mark_complete(rows, started)
         for pr in probs:
             flags.append(f"{name}: {pr}")
         merge_daily(p.d(f"overview_{label}_latest.csv"), p.d(f"overview_{label}_history.csv"),
@@ -902,6 +959,7 @@ def cmd_finish(p, folder):
         vo = expect_file("video_overview_14d.csv")
         if vo:
             rows, probs = parse_export(vo, VIDEO_DAILY_FIELDS, "date")
+            mark_complete(rows, started)
             for pr in probs:
                 flags.append(f"video_overview_14d.csv: {pr}")
             merge_daily(p.d("video_daily_latest.csv"), p.d("video_daily_history.csv"), pid, pulled,
@@ -943,12 +1001,16 @@ def cmd_finish(p, folder):
         # 7. payout history as listed in Creator Studio, kept once per program and period
         pl = expect_file("payouts_list.csv")
         if pl:
-            have_rows = read_csv(p.d("payouts_list.csv"))
-            seen = {(r.get("program"), r.get("period")) for r in have_rows}
+            before = len(read_csv(p.d("payouts_list.csv")))
+            have_rows = dedupe_payouts(p.d("payouts_list.csv"))
+            removed = before - len(have_rows)
+            if removed:
+                flags.append(f"payouts_list.csv: removed {removed} duplicate rows left by an older pull")
+            seen = {payout_key(r.get("program"), r.get("period")) for r in have_rows}
             new_rows = []
             for r in read_csv(pl):
                 r = {k.strip().lower(): (v or "").strip() for k, v in r.items() if k}
-                key = (r.get("program"), r.get("period"))
+                key = payout_key(r.get("program"), r.get("period"))
                 if key in seen or not r.get("amount"):
                     continue
                 seen.add(key)
@@ -958,9 +1020,11 @@ def cmd_finish(p, folder):
             append_csv(p.d("payouts_list.csv"), ["program", "period", "amount_raw", "amount", "paid_date",
                                                  "first_seen_pull"], new_rows)
             total = sum(parse_num(r.get("amount")) or 0 for r in read_csv(p.d("payouts_list.csv")))
-            out["payouts_list"] = {"status": "ok", "new_payouts": len(new_rows), "listed_total": round(total, 2)}
+            out["payouts_list"] = {"status": "ok", "new_payouts": len(new_rows), "duplicates_removed": removed,
+                                   "rows": before - removed + len(new_rows), "listed_total": round(total, 2)}
         else:
-            out["payouts_list"] = {"status": "not saved this pull"}
+            out["payouts_list"] = {"status": NOT_AVAILABLE if unavailable(cfg, "payouts_list.csv")
+                                   else "not saved this pull"}
 
         # 7. payouts
         amt, pdt = pv.get("payout_amount", {}), pv.get("payout_date", {})
@@ -1227,9 +1291,10 @@ def summary(o):
         if po.get("status") == "ok":
             L.append(f"Posts: {po['posts_in_export']} in the export, {po['posts_tracked_total']} tracked in total. "
                      + po["content_export_date_check"].get("conclusion", ""))
-        if o.get("payouts_list", {}).get("new_payouts"):
-            L.append(f"New payouts in Creator Studio: {o['payouts_list']['new_payouts']}. "
-                     f"Total of all listed: ${o['payouts_list']['listed_total']:,.2f}")
+        pls = o.get("payouts_list", {})
+        if pls.get("status") == "ok":
+            L.append(f"Payouts in Creator Studio: {pls['rows']} listed, {pls['new_payouts']} new this pull. "
+                     f"Total of all listed: ${pls['listed_total']:,.2f}")
         if o.get("payout", {}).get("new"):
             L.append(f"New payout: {o['payout']['amount_raw']} on {o['payout']['payout_date']}")
     L.append("Flags: " + ("; ".join(o["flags"]) if o["flags"] else "none"))

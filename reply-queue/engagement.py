@@ -4,8 +4,9 @@ engagement.py
 Read-only engagement tracker shared by two Grok Bots: Reply Queue and Fan Finder.
 
 Commands
-  auth        One-time sign-in that adds like.read to the Follow Audit token, so
-              the script can see who liked your posts. Still read-only.
+  auth        Redo the crew's one shared sign-in with like.read added (same as
+              `follow_watch.py auth --likes`), so the script can see who liked
+              your posts. Still read-only.
   pull        Read what's new since the last pull: your posts and replies, posts
               that mention you, quotes of your recent posts, and who liked your
               posts once they're a day old. Writes a cost report.
@@ -21,7 +22,12 @@ Commands
 
 What it never does
   No follow, like, repost, reply, post, DM, block or mute. GET requests only,
-  plus the OAuth token exchange. Uses the Follow Audit sign-in.
+  plus the OAuth token exchange. Uses the crew's one shared sign-in
+  ($BOTS_HOME/dispatch/x_signin.json, owned by Dispatch) through follow_watch.XClient.
+
+Run it with CREW_BOT="Reply Queue" or CREW_BOT="Fan Finder" so every request is
+booked to the right bot. There is no default. If a cap stops a pull, the report,
+radar and leads all say "stopped before <what>, cap reached" instead of showing 0.
 
 Data lives in /workspace/engagement (override with --dir or EN_DIR).
 Needs follow_watch.py in /workspace/follow-watch.
@@ -37,6 +43,27 @@ from datetime import datetime, timedelta, timezone
 
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
+
+_PRICES = None
+
+
+def P():
+    """The crew's shared price table (x_prices.py, next to follow_watch.py)."""
+    global _PRICES
+    if _PRICES is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (os.environ.get("FW_DIR"), os.path.join(BOTS_HOME, "follow-watch"),
+                  os.path.join(here, "..", "follow-audit"), os.path.join(here, "..", "follow-watch")):
+            if d and os.path.exists(os.path.join(d, "x_prices.py")):
+                if d not in sys.path:
+                    sys.path.insert(0, d)
+                import x_prices
+                _PRICES = x_prices
+                break
+        else:
+            raise SystemExit("x_prices.py not found. It ships next to follow_watch.py in the Follow Audit folder.")
+    return _PRICES
+
 
 DEFAULT_CONFIG = {
     "follow_watch_dir": BOTS_HOME + "/follow-watch",
@@ -64,18 +91,13 @@ DEFAULT_CONFIG = {
     "leads_min_points": 2,
     "leads_min_followers": None,
     "leads_resurface_days": 21,
-    "price_owned": 0.001,
-    "price_post": 0.005,
-    "price_like": 0.001,
-    "price_user": 0.010,
-    "liker_price_confirmed": None,
     "exclude_terms": None,
     "timezone": None,
 }
 
 TWEET_FIELDS = "created_at,public_metrics,conversation_id,referenced_tweets,in_reply_to_user_id,author_id,lang"
 
-OPTIONAL_NONE = {"liker_price_confirmed"}
+OPTIONAL_NONE = set()
 
 def check_config(cfg, where):
     """Every setting left as None must come from the user's own config.json, written by Foreman."""
@@ -158,31 +180,23 @@ def local_now(cfg):
 # ----------------------------------------------------------------------------
 
 class Spend:
+    """Counts what this pull read and prices it from the crew's one table (x_prices.py),
+    the same table the spend ledger uses, so the report and the ledger agree."""
+
     def __init__(self, cfg, cap):
         self.cfg, self.cap = cfg, cap
-        self.owned = self.quotes = self.likers = self.users = self.requests = 0
+        self.owned = self.quotes = self.likers = self.users = self.lookups = self.requests = 0
+        self.crew_cap = None  # set when the crew's daily cap stopped a read
 
-    def low(self):
-        c = self.cfg
-        lp = c["liker_price_confirmed"] if c.get("liker_price_confirmed") is not None else c["price_like"]
-        return self.owned * c["price_owned"] + self.quotes * c["price_post"] + self.likers * lp
+    def cost(self):
+        return P().estimate(owned=self.owned + self.likers, post=self.quotes,
+                            user=self.lookups, attached_user=self.users)
 
-    def liker_price(self):
-        c = self.cfg
-        return c["liker_price_confirmed"] if c.get("liker_price_confirmed") is not None else c["price_user"]
-
-    def high(self):
-        c = self.cfg
-        return (self.owned * c["price_owned"] + self.quotes * c["price_post"]
-                + self.likers * self.liker_price() + self.users * c["price_user"])
-
-    def basis(self):
-        """What the cap is checked against. X has billed at the low estimate so far
-        (cost report, Oct 20), so the high estimate stopped pulls far too early."""
-        return self.low() if self.cfg.get("cap_basis", "low") == "low" else self.high()
+    # older names, kept so saved runs and callers still read the same number
+    low = high = basis = cost
 
     def room(self, worst):
-        return self.basis() + worst <= self.cap
+        return self.cost() + worst <= self.cap
 
 
 # ----------------------------------------------------------------------------
@@ -201,6 +215,12 @@ def slim_user(fw, u):
     return s
 
 
+def fw_cap():
+    """The shared client's CapReached, found on the loaded follow_watch module."""
+    mod = sys.modules.get("follow_watch")
+    return getattr(mod, "CapReached", ()) or ()
+
+
 def paged(client, spend, path, params, kind, max_items=10 ** 9, worst_each=0.0, stop_ids=None):
     """Generic paged GET. kind decides which meter bucket counts the results.
     stop_ids: stop after a page that contains any of these ids (newest-first lists)."""
@@ -211,7 +231,11 @@ def paged(client, spend, path, params, kind, max_items=10 ** 9, worst_each=0.0, 
         p = dict(params)
         if token:
             p["pagination_token"] = token
-        body = client.get(path, p)
+        try:
+            body = client.get(path, p)
+        except fw_cap() as e:  # the crew's daily cap: stop this read, keep what came in
+            spend.crew_cap = e
+            return out, users, True
         spend.requests += 1
         data = body.get("data", []) or []
         inc = (body.get("includes") or {}).get("users", []) or []
@@ -245,9 +269,14 @@ def cmd_pull(st, fw, client, trial=False):
     users = st.load("users", {})
     notes = []
     stopped = False
+    cut = []  # what this pull didn't read, or didn't finish, because a cap stopped it
+
+    def mark(label):
+        if label not in cut:
+            cut.append(label)
 
     me = client.me()
-    spend.owned += 1
+    spend.lookups += 1
     my_id = me["id"]
     state["me"] = {"id": my_id, "username": me["username"]}
     first_start = iso(started - timedelta(days=cfg["first_pull_days"]))
@@ -258,8 +287,10 @@ def cmd_pull(st, fw, client, trial=False):
         params["since_id"] = state["own_since"]
     else:
         params["start_time"] = first_start
-    mine, _, hit = paged(client, spend, f"/users/{my_id}/tweets", params, "owned", worst_each=cfg["price_owned"])
+    mine, _, hit = paged(client, spend, f"/users/{my_id}/tweets", params, "owned", worst_each=P().RATES["owned"])
     stopped |= hit
+    if hit:
+        mark("your posts")
     for t in mine:
         replied = ref(t, "replied_to")
         quoted = ref(t, "quoted")
@@ -272,25 +303,6 @@ def cmd_pull(st, fw, client, trial=False):
     if mine:
         state["own_since"] = max(mine, key=lambda t: int(t["id"]))["id"]
 
-    # 2. what I've liked, so the radar can leave out anything I already liked.
-    # Reads newest first and stops at the first like it already knows, so each
-    # pull only pays for new likes. The saved list keeps growing (trimmed to 5,000).
-    if cfg["check_my_likes"] and spend.room(100 * cfg["price_owned"]):
-        try:
-            known = st.load("my_likes", [])
-            liked, _, _ = paged(client, spend, f"/users/{my_id}/liked_tweets",
-                                {"max_results": 100, "tweet.fields": "created_at"}, "owned",
-                                max_items=cfg["my_likes_max_per_pull"], worst_each=cfg["price_owned"],
-                                stop_ids=set(known))
-            new = [t["id"] for t in liked if t["id"] not in set(known)]
-            st.save("my_likes", (new + known)[:5000])
-            if new:
-                notes.append(f"Read {len(new)} new likes of yours.")
-        except SystemExit as e:
-            if "403" not in str(e) and "401" not in str(e):
-                raise
-            notes.append("X refused reading my likes. Run `engagement.py auth` once to add like.read.")
-
     # 3. posts that mention me (replies to my posts land here too)
     params = {"max_results": 100, "tweet.fields": TWEET_FIELDS, "expansions": "author_id",
               "user.fields": user_fields(fw)}
@@ -298,12 +310,14 @@ def cmd_pull(st, fw, client, trial=False):
         params["since_id"] = state["mention_since"]
     else:
         params["start_time"] = first_start
-    ments, inc, hit = paged(client, spend, f"/users/{my_id}/mentions", params, "owned",
-                            worst_each=cfg["price_owned"] + cfg["price_user"])
+    if stopped and spend.crew_cap:
+        ments, inc, hit = [], {}, True
+    else:
+        ments, inc, hit = paged(client, spend, f"/users/{my_id}/mentions", params, "owned",
+                                worst_each=P().RATES["owned"] + P().RATES["attached_user"])
     stopped |= hit
     if hit:
-        notes.append("The cost cap stopped the mentions read early. Some older mentions in this window "
-                     "may be missing. Raise max_cost_per_run if this repeats.")
+        mark("mentions")
     for u in inc.values():
         users[u["id"]] = slim_user(fw, u)
     for t in ments:
@@ -325,14 +339,17 @@ def cmd_pull(st, fw, client, trial=False):
         last_q = p.get("quotes_checked")
         if last_q and (started - ts(last_q)).total_seconds() < cfg["quote_recheck_hours"] * 3600:
             continue
-        if stopped or not spend.room(cfg["price_post"] + cfg["price_user"]):
+        if stopped or not spend.room(P().RATES["post"] + P().RATES["attached_user"]):
             stopped = True
+            mark("quote posts")
             break
         params = {"max_results": 100, "tweet.fields": TWEET_FIELDS, "expansions": "author_id",
                   "user.fields": user_fields(fw)}
         qs, inc, hit = paged(client, spend, f"/tweets/{pid}/quote_tweets", params, "quotes",
-                             worst_each=cfg["price_post"] + cfg["price_user"])
+                             worst_each=P().RATES["post"] + P().RATES["attached_user"])
         stopped |= hit
+        if hit:
+            mark("quote posts")
         for u in inc.values():
             users[u["id"]] = slim_user(fw, u)
         posts[pid]["quotes_checked"] = iso(started)
@@ -342,6 +359,41 @@ def cmd_pull(st, fw, client, trial=False):
             events[t["id"]] = {"kind": "quote", "author": t.get("author_id"), "created": t.get("created_at"),
                                "text": (t.get("text") or "")[:280], "target": pid,
                                "conversation": t.get("conversation_id")}
+
+    # 4b. what I've liked, read after mentions and quotes so a tight cap still
+    # gets the items. If this doesn't finish, the radar keeps the items and marks them
+    # "may already be liked". So the radar can leave out anything I already liked.
+    # Reads newest first and stops at the first like it already knows, so each
+    # pull only pays for new likes. The saved list keeps growing (trimmed to 5,000).
+    likes_done = not cfg["check_my_likes"]
+    if cfg["check_my_likes"] and (not spend.room(100 * P().RATES["owned"])):
+        stopped = True
+        mark("your likes")
+    elif cfg["check_my_likes"]:
+        try:
+            known = st.load("my_likes", [])
+            liked, _, lhit = paged(client, spend, f"/users/{my_id}/liked_tweets",
+                                {"max_results": 100, "tweet.fields": "created_at"}, "owned",
+                                max_items=cfg["my_likes_max_per_pull"], worst_each=P().RATES["owned"],
+                                stop_ids=set(known))
+            if lhit:
+                stopped = True
+                mark("your likes")
+            else:
+                likes_done = True
+            new = [t["id"] for t in liked if t["id"] not in set(known)]
+            st.save("my_likes", (new + known)[:5000])
+            if new:
+                notes.append(f"Read {len(new)} new likes of yours.")
+        except SystemExit as e:
+            if "403" not in str(e) and "401" not in str(e):
+                raise
+            notes.append("X refused reading your likes. Run `engagement.py auth` once to add like.read.")
+
+    state["likes_unfinished"] = not likes_done and cfg["check_my_likes"]
+    if state["likes_unfinished"]:
+        notes.append("Your likes weren't finished this pull. The Reply Queue keeps every item and marks "
+                     "the ones it couldn't check \"may already be liked\".")
 
     # 5. who liked my originals once they're a day old
     lo = started - timedelta(days=cfg["likers_before_days"])
@@ -353,9 +405,20 @@ def cmd_pull(st, fw, client, trial=False):
     limit = cfg["trial_max_liker_posts"] if trial else cfg["max_liker_posts_per_run"]
     likes_ok = True
     batch = todo[:limit]
-    if batch and spend.room(len(batch) * cfg["price_owned"]):
+    body = None
+    if batch and (stopped or not spend.room(len(batch) * P().RATES["owned"])):
+        stopped = True
+        mark("likers")
+        batch = []
+    elif batch:
         # refresh like counts, the ones saved when the post was new are stale
-        body = client.get("/tweets", {"ids": ",".join(batch), "tweet.fields": "public_metrics"})
+        try:
+            body = client.get("/tweets", {"ids": ",".join(batch), "tweet.fields": "public_metrics"}, owned=True)
+        except fw_cap() as e:
+            spend.crew_cap, stopped = e, True
+            mark("likers")
+            batch = []
+    if body is not None:
         spend.requests += 1
         spend.owned += len(body.get("data", []) or [])
         for t in body.get("data", []) or []:
@@ -365,13 +428,16 @@ def cmd_pull(st, fw, client, trial=False):
         if n == 0:
             posts[pid]["likers_fetched"] = True
             continue
-        if stopped or not spend.room(n * spend.liker_price()):
+        if stopped or not spend.room(n * P().RATES["owned"]):
             stopped = True
+            mark("likers")
             break
         try:
             likers, _, hit = paged(client, spend, f"/tweets/{pid}/liking_users",
                                    {"max_results": max(1, min(100, n)), "user.fields": user_fields(fw)}, "likers",
-                                   max_items=n, worst_each=spend.liker_price())
+                                   max_items=n, worst_each=P().RATES["owned"])
+            if hit:
+                mark("likers")
         except SystemExit as e:
             if "403" in str(e) or "401" in str(e):
                 likes_ok = False
@@ -398,7 +464,17 @@ def cmd_pull(st, fw, client, trial=False):
     live = {e["author"] for e in events.values()}
     users = {k: v for k, v in users.items() if k in live}
 
+    if cut:
+        which = "the crew's daily cap" if spend.crew_cap else "this pull's cost cap"
+        first = cut[0]
+        line = (f"Stopped before {first}, cap reached ({which}). Not read or not finished this pull: "
+                f"{', '.join(cut)}. Counts for those are missing, not zero. The next pull picks them up.")
+        if spend.crew_cap:
+            line += f" {spend.crew_cap}"
+        notes.insert(0, line)
+        print(f"{client.who}: {line}")
     state["last_pull"] = iso(started)
+    state["last_pull_cut"] = cut
     st.save("state", state)
     st.save("posts", posts)
     st.save("events", events)
@@ -406,9 +482,10 @@ def cmd_pull(st, fw, client, trial=False):
     runs = st.load("runs", [])
     runs.append({"ts": iso(started), "trial": trial, "requests": spend.requests, "owned": spend.owned,
                  "quotes": spend.quotes, "likers": spend.likers, "users": spend.users,
-                 "low": round(spend.low(), 4), "high": round(spend.high(), 4), "capped": stopped})
+                 "cost": round(spend.cost(), 4), "low": round(spend.low(), 4), "high": round(spend.high(), 4), "capped": stopped,
+                 "not_read": cut})
     st.save("runs", runs[-200:])
-    path = write_pull_report(st, spend, stopped, notes, trial, posts, events, started)
+    path = write_pull_report(st, spend, stopped, notes, trial, posts, events, started, cut)
     print(path)
 
 
@@ -418,24 +495,26 @@ def per_day(items, started, days):
     return n / days
 
 
-def write_pull_report(st, spend, stopped, notes, trial, posts, events, started):
+def write_pull_report(st, spend, stopped, notes, trial, posts, events, started, cut=()):
     cfg = st.cfg
     lt = local_now(cfg)
     L = [f"# Engagement pull{' (trial)' if trial else ''}, {lt.strftime('%a %b %d, %Y %I:%M %p')}", "",
          "Read-only run. Nothing was liked, replied to, posted or followed.", ""]
     for n in notes:
         L += [f"> {n}", ""]
+    r = P().RATES
     L += ["## Cost", "",
           f"- Requests: {spend.requests}",
-          f"- Your own posts and mentions read: {spend.owned:,} at ${cfg['price_owned']:.3f}",
-          f"- Quote posts read: {spend.quotes:,} at ${cfg['price_post']:.3f}",
-          f"- Likers read: {spend.likers:,} at ${cfg['price_like']:.3f} to ${cfg['price_user']:.3f}",
-          f"- Profiles attached to mentions and quotes: {spend.users:,}",
-          f"- Estimated cost: {money(spend.low())} to {money(spend.high())}",
+          f"- Your own posts, mentions and likes read: {spend.owned:,} at ${r['owned']:.3f}",
+          f"- Likers of your posts read: {spend.likers:,} at ${r['owned']:.3f}",
+          f"- Quote posts read: {spend.quotes:,} at ${r['post']:.3f}",
+          f"- Profiles attached to mentions and quotes: {spend.users:,} at ${r['attached_user']:.3f}",
+          f"- Account check: {spend.lookups:,} at ${r['user']:.3f}",
+          f"- Estimated cost: {money(spend.cost())}, from the crew price table the spend ledger also uses",
           f"- Cap: {money(spend.cap)}, checked before each page, so a run can pass it by one page"
-          + (". Reached, some reads were left for the next pull." if stopped else ""),
-          "", "The low number assumes likes and attached profiles bill at the like and owned rates. "
-          "The high number bills every profile at the full user rate. The X developer console settles it.", ""]
+          + (f". Reached, not read or not finished: {', '.join(cut)}." if cut else
+             (". Reached, some reads were left for the next pull." if stopped else "")),
+          "", "The X developer console has the billed amount.", ""]
 
     days = min(cfg["first_pull_days"], 7)
     own = [p["created"] for p in posts.values()]
@@ -449,20 +528,17 @@ def write_pull_report(st, spend, stopped, notes, trial, posts, events, started):
     od, md, qd = per_day(own, started, days), per_day(ments, started, days), per_day(quotes, started, days)
     origd = per_day([p["created"] for p in orig], started, days)
     likesd = origd * min(likers_per_post, cfg["max_likers_per_post"])
-    c = cfg
-    low = (od + md + 100 * c["check_my_likes"]) * c["price_owned"] + qd * c["price_post"] + likesd * c["price_like"]
-    high = (od + md + 100 * c["check_my_likes"]) * c["price_owned"] + qd * (c["price_post"] + c["price_user"]) \
-        + likesd * c["price_user"] + md * c["price_user"]
+    c, r = cfg, P().RATES
+    low = high = ((od + md + 100 * c["check_my_likes"] + likesd) * r["owned"] + qd * r["post"]
+                  + (md + qd) * r["attached_user"])
     L += ["## What a daily pull would cost", "",
           f"From the last {days} days: about {od:.0f} posts and replies of yours a day, {origd:.0f} of them "
           f"originals, {md:.0f} replies and mentions a day, {qd:.0f} quotes a day, and about "
           f"{likers_per_post:.0f} likes per original.", "",
           "| | Per day | Per 30 days |", "|---|---|---|",
-          f"| With likes (Fan Finder uses them) | {money(low)} to {money(high)} | {money(low * 30)} to {money(high * 30)} |"]
-    low_nl = low - likesd * c["price_like"]
-    high_nl = high - likesd * c["price_user"]
-    L += [f"| Without likes (Reply Queue only) | {money(low_nl)} to {money(high_nl)} | "
-          f"{money(low_nl * 30)} to {money(high_nl * 30)} |", ""]
+          f"| With likes (Fan Finder uses them) | {money(low)} | {money(low * 30)} |"]
+    low_nl = low - likesd * r["owned"]
+    L += [f"| Without likes (Reply Queue only) | {money(low_nl)} | {money(low_nl * 30)} |", ""]
     L += ["## Data on hand", "",
           f"- Your posts: {len(posts):,} ({len(orig):,} originals, {len(liked_posts):,} checked for likes)",
           f"- Replies and mentions: {len(ments):,}",
@@ -570,6 +646,7 @@ def cmd_radar(st, fw, fw_store):
         raise SystemExit("No pull yet. Run `engagement.py pull` first.")
     posts, events, users = st.load("posts", {}), st.load("events", {}), st.load("users", {})
     my_likes = set(st.load("my_likes", []))
+    likes_unfinished = bool(state.get("likes_unfinished"))
     me = state.get("me", {})
     fw_cfg = fw_store.load_config()
     fw_accounts = fw_store.load_state().get("accounts", {})
@@ -605,17 +682,24 @@ def cmd_radar(st, fw, fw_store):
         mutual = they and i
         tier = 0 if (verified and mutual) else 1 if verified else 2 if mutual else 3
         items.append({"id": eid, "e": e, "u": u, "tier": tier, "verified": verified, "mutual": mutual,
-                      "liked": eid in my_likes})
+                      "liked": eid in my_likes, "maybe_liked": likes_unfinished and eid not in my_likes})
     items.sort(key=lambda x: (x["liked"], x["tier"], -ts(x["e"]["created"]).timestamp()))
     shown = items[:cfg["radar_show"]]
 
     names = ["Verified mutuals", "Verified", "Mutuals", "Everyone else"]
     lt = local_now(cfg)
+    warn = cap_warning(st)
     L = [f"# Reply Queue, {lt.strftime('%a %b %d, %Y %I:%M %p')}", "",
          f"Replies, mentions and quotes from the last {cfg['radar_hours']} hours that you haven't replied to. "
-         "Read-only. You reply yourself.", "",
+         "Read-only. You reply yourself.", ""] + ([f"> {warn}", ""] if warn else []) + [
          f"{len(items)} unanswered. " + ", ".join(f"{names[t]}: {sum(1 for x in items if x['tier'] == t)}"
                                               for t in range(4)) + ".", ""]
+    if likes_unfinished:
+        n = sum(1 for x in items if x["maybe_liked"])
+        L += [f"Your likes weren't finished in the last pull, so {n} items are kept and marked "
+              "\"may already be liked\". You may have liked some of them already.", ""]
+    if "mentions" in (state.get("last_pull_cut") or []):
+        L += ["Mentions weren't read in the last pull, so this count is missing mentions. It is not a real 0.", ""]
     if hidden:
         L += ["Hidden: " + ", ".join(f"{n} {why}" for why, n in hidden.items()) + ".", ""]
     data = []
@@ -642,6 +726,8 @@ def cmd_radar(st, fw, fw_store):
             chips.append({"t": "mutual", "a": True})
         if x["liked"]:
             chips.append({"t": "you liked it"})
+        elif x.get("maybe_liked"):
+            chips.append({"t": "may already be liked"})
         links = [{"t": "Open and reply", "u": f"https://x.com/{u.get('username', 'i')}/status/{x['id']}"}]
         if e.get("target") and e["target"] in posts:
             links.append({"t": "Your post", "u": f"https://x.com/{me.get('username')}/status/{e['target']}"})
@@ -652,8 +738,11 @@ def cmd_radar(st, fw, fw_store):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
     write_page(os.path.join(st.reports, "mention_radar.html"), "Reply Queue",
+               (f"{warn} " if warn else "") +
                f"{len(items)} unanswered from the last {cfg['radar_hours']} hours, {lt.strftime('%b %d, %I:%M %p')}. "
                "Verified mutuals first, newest first within each group.", "radar-done", data)
+    if warn:
+        print(warn)
     print(path)
 
 
@@ -666,7 +755,8 @@ def radar_line(x, posts, me, now):
     target = ""
     if e.get("target") and e["target"] in posts:
         target = f", on [your post](https://x.com/{me.get('username')}/status/{e['target']})"
-    return (f"- [@{who}](https://x.com/{who}) {e['kind']}, {ago(ts(e['created']), now)}{target}: "
+    maybe = " (may already be liked)" if x.get("maybe_liked") else ""
+    return (f"- [@{who}](https://x.com/{who}) {e['kind']}{maybe}, {ago(ts(e['created']), now)}{target}: "
             f"[{snippet or 'open'}](https://x.com/{who}/status/{x['id']})")
 
 
@@ -744,6 +834,9 @@ def cmd_leads(st, fw, fw_store):
     L = [f"# Fan Finder, {lt.strftime('%a %b %d, %Y')}", "",
          f"Verified accounts that engaged with your posts in the last {cfg['leads_days']} days and don't follow you. "
          "You don't follow them either. Read-only. You follow by hand.", ""]
+    warn = cap_warning(st)
+    if warn:
+        L += [f"> {warn}", ""]
     if cfg["max_liker_posts_per_run"] == 0:
         L += ["> Likes are turned off (max_liker_posts_per_run is 0), so this list counts replies, "
               "mentions and quotes.", ""]
@@ -779,8 +872,11 @@ def cmd_leads(st, fw, fw_store):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
     write_page(os.path.join(st.reports, "warm_leads.html"), "Fan Finder",
+               (f"{warn} " if warn else "") +
                f"{len(top)} verified accounts that engage with your posts but don't follow you, "
                f"{lt.strftime('%b %d')}.", "leads-done-" + today.isoformat(), data)
+    if warn:
+        print(warn)
     print(path)
 
 
@@ -795,11 +891,33 @@ def cmd_status(st):
     runs = st.load("runs", [])
     if runs:
         r = runs[-1]
-        print(f"Last run cost: {money(r['low'])} to {money(r['high'])}{' (capped)' if r['capped'] else ''}")
+        print(f"Last run cost: about {money(r['low'])}{' (capped)' if r['capped'] else ''}")
+        if r.get("not_read"):
+            print(f"Last run stopped before {r['not_read'][0]}, cap reached. Not read: {', '.join(r['not_read'])}.")
+
+
+def cap_warning(st):
+    """Plain warning when the last pull (or this run's pull) was stopped by a cap, so a short or
+    empty list is never mistaken for a real 0."""
+    if getattr(st, "pull_blocked", None):
+        lp = st.load("state", {}).get("last_pull", "never")
+        return f"{st.pull_blocked} This list is from the last pull that ran ({lp}), not a new one."
+    cut = st.load("state", {}).get("last_pull_cut") or []
+    if cut:
+        return (f"The last pull stopped before {cut[0]}, cap reached. Not read: {', '.join(cut)}. "
+                "This list may be missing items, so a low count here is not a real count.")
+    return None
 
 
 def stale(st, hours):
-    lp = st.load("state", {}).get("last_pull")
+    """Stale when never pulled, older than HOURS, or when the last pull was a trial or was cut
+    short by a cap. A capped pull never counts as fresh, so it can't turn into a fake 0."""
+    state = st.load("state", {})
+    lp = state.get("last_pull")
+    runs = st.load("runs", [])
+    last = runs[-1] if isinstance(runs, list) and runs else {}
+    if state.get("last_pull_cut") or last.get("trial") or last.get("capped"):
+        return True
     return not lp or (now_utc() - ts(lp)).total_seconds() > hours * 3600
 
 
@@ -807,7 +925,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only engagement tracker for Reply Queue and Fan Finder.")
     ap.add_argument("command", choices=["auth", "pull", "radar", "leads", "status"])
     ap.add_argument("--trial", action="store_true")
-    ap.add_argument("--paste", action="store_true", help="auth: paste the redirect URL instead of listening")
+    ap.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
     ap.add_argument("--pull-if-stale", type=float, default=None, metavar="HOURS")
     ap.add_argument("--dir", default=os.environ.get("EN_DIR", BOTS_HOME + "/engagement"))
     a = ap.parse_args(argv)
@@ -828,7 +946,14 @@ def main(argv=None):
         fw.cmd_auth(fw_store, fw_cfg, client(), a.paste)
         return
     if a.command == "pull" or (a.pull_if_stale is not None and stale(st, a.pull_if_stale)):
-        cmd_pull(st, fw, client(), trial=a.trial)
+        c = client()
+        try:
+            cmd_pull(st, fw, c, trial=a.trial)
+        except fw.CapReached as e:  # stopped at the very first read, so nothing new was saved
+            st.pull_blocked = f"{c.who} stopped before {e.label}, cap reached. Nothing was read this time."
+            print(f"{st.pull_blocked} {e}")
+            if a.command == "pull":
+                sys.exit(3)
         if a.command == "pull":
             return
     if a.command == "radar":

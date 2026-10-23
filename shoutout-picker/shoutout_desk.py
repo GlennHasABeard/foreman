@@ -299,8 +299,12 @@ def cmd_candidates(desk):
         count[r["source"]] = count.get(r["source"], 0) + 1
     print(path)
     print(", ".join(f"{n} {k}" for k, n in count.items()) +
-          f" to review. Eligible new pool: {pool} ({len(fresh)} became mutual since the {baseline} baseline). "
+          f" to review. Eligible new pool: {pool} ({len(fresh)} became mutual since the {baseline or 'unset'} baseline). "
           f"Skipped in the last {cooldown} days and left out: {len(recent_skips)}. Mutual list from the scan of {scan}.")
+    lf = state.get("last_full") or {}
+    if lf.get("partial"):
+        print(f"PARTIAL: Follow Audit's last scan read only the first {(lf.get('read') or {}).get('followers')} "
+              f"followers (--limit {lf.get('limit')}), so this list covers only those mutuals, not all of them.")
     if dropped_mutual:
         print("No longer mutual, taken off the list: " + ", ".join("@" + h for h in dropped_mutual))
 

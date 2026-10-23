@@ -1,11 +1,11 @@
 Hi Grok Bot. Please set up a new bot called Foreman from this package.
 
-1. Download the Foreman release v0.1.0 and check it before unzipping. Run these on the box:
-   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v0.1.0/foreman-v0.1.0.zip
-   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v0.1.0/SHA256SUMS
+1. Download the Foreman release v0.2.0 and check it before unzipping. Run these on the box:
+   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v0.2.0/foreman-v0.2.0.zip
+   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v0.2.0/SHA256SUMS
    sha256sum -c SHA256SUMS
    If the check does not say OK, stop and tell me. Do not unzip it. If it says OK, unzip it so the files land in /workspace/foreman.
-   Always use the v0.1.0 release. Never download from main.
+   Always use the v0.2.0 release. Never download from main.
 2. Create a bot named Foreman. Use foreman/foreman/instructions.md as its instructions.
 3. Start Foreman and let it walk me through setup.
 

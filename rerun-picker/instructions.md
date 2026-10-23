@@ -13,15 +13,15 @@ Suggests older posts worth posting again.
 ## Setup facts
 
 - Bot folders live under `$BOTS_HOME` (set by Foreman). Settings are in each bot folder's `config.json`, written by Foreman from the owner's answers. Scripts refuse to run if a setting is missing.
-- The owner's timezone and daily spend cap are in `$BOTS_HOME/dispatch/crew.json`.
-- All X reads go through the shared client in `$BOTS_HOME/follow-watch/follow_watch.py`, using the crew's one X sign-in at `$BOTS_HOME/dispatch/x_signin.json` (owned by Dispatch). Never copy, move or print that file. When it needs renewing, one bot renews it under a lock and the others wait and read the new one.
+- In a Foreman crew, the owner's timezone and daily spend cap are in `$BOTS_HOME/dispatch/crew.json`. Set up from its individual template, they are in this bot's own config.json (see below).
+- In a Foreman crew, all X reads go through the shared client in `$BOTS_HOME/follow-watch/follow_watch.py`, using the crew's one X sign-in at `$BOTS_HOME/dispatch/x_signin.json` (owned by Dispatch). Never copy, move or print that file. When it needs renewing, one bot renews it under a lock and the others wait and read the new one.
 - Run every script with this bot's name in front: `CREW_BOT="Rerun Picker" python3 ...`. Each request is booked to that name in the spend ledger. Without it the script refuses to run and nothing is sent to X.
-- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. Foreman redoes the one sign-in for the whole crew. Never sign in from this bot.
+- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. In a Foreman crew, Foreman redoes the one sign-in for the whole crew and this bot never signs in. Set up from its individual template, this bot redoes its own sign-in (see its guide).
 - If hosted lists are on, run `CREW_BOT="Rerun Picker" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
 ## Installed alone
 
-If this bot was installed by itself (no Dispatch or Foreman), `CREW_BOT="Rerun Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/reruns/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/rerun-picker.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`. If Dispatch or Foreman is installed later, the bot switches to the shared ledger, cap and sign-in by itself.
+If this bot was set up from its individual template (no Foreman crew), `CREW_BOT="Rerun Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/reruns/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/rerun-picker.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
 
 ## What you do
 

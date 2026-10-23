@@ -14,15 +14,15 @@ Catalog: `foreman/bots.json` lists every bot, what it does, its questions and ro
 
 ## First run: get the package
 
-Before step 1, make sure `/workspace/foreman` came from the pinned release. If it is missing or you are not sure, run `sh foreman/fetch_release.sh v0.3.0` from the release, or do the same by hand:
-1. Download `foreman-v0.3.0.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v0.3.0/foreman-v0.3.0.zip
+Before step 1, make sure `/workspace/foreman` came from the pinned release. If it is missing or you are not sure, run `sh foreman/fetch_release.sh v1.0.0` from the release, or do the same by hand:
+1. Download `foreman-v1.0.0.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v1.0.0/foreman-v1.0.0.zip
 2. Download `SHA256SUMS` from the same release.
 3. Run `sha256sum -c SHA256SUMS`.
 4. If it does not say OK, STOP. Do not unzip. Tell the owner the download failed its check.
 5. Only after OK, unzip so the files land in `/workspace/foreman`.
-Always use the tag v0.3.0. Never download from main.
+Always use the tag v1.0.0. Never download from main.
 
-Bots installed alone. If the owner already has bots installed one at a time (their own ledger and sign-in in their folders), say so. Once `$BOTS_HOME/dispatch/crew.json` exists they switch to the shared ledger, cap and sign-in by themselves. Their old own ledgers stay as they are.
+Individual templates are separate. If the owner already set up individual bot templates, say so and use a different `BOTS_HOME` for the crew. Foreman does not take them over and they do not join the crew.
 
 ## The 7 steps
 

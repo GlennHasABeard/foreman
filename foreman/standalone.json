@@ -1,6 +1,6 @@
 {
-  "_about": "One bot at a time. Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
-  "version": "v0.3.0",
+  "_about": "Individual bot templates, each set up alone with its own sign-in and spend cap. Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
+  "version": "v1.0.0",
   "install_targets": {
     "follow-audit/follow_watch.py": "follow-watch",
     "follow-audit/x_prices.py": "follow-watch",
@@ -13,6 +13,7 @@
       "folder": "follow-watch",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -43,6 +44,7 @@
       "folder": "creator-scout",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -76,6 +78,7 @@
       "folder": "shoutouts",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -109,6 +112,7 @@
       "folder": "engagement",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -141,6 +145,7 @@
       "folder": "engagement",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -175,6 +180,7 @@
       "folder": "reruns",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",
@@ -206,6 +212,7 @@
       "folder": "x-analytics",
       "files": [
         "README.md",
+        "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
         "foreman/fetch_release.sh",

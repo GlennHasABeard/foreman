@@ -13,10 +13,10 @@ Saves X analytics exports every day.
 ## Setup facts
 
 - Bot folders live under `$BOTS_HOME` (set by Foreman). Settings are in each bot folder's `config.json`, written by Foreman from the owner's answers. Scripts refuse to run if a setting is missing.
-- The owner's timezone and daily spend cap are in `$BOTS_HOME/dispatch/crew.json`.
+- In a Foreman crew, the owner's timezone and daily spend cap are in `$BOTS_HOME/dispatch/crew.json`. Set up from its individual template, the timezone is in this bot's own config.json and there is no API cost to cap.
 - Analytics Log uses the browser, not the X API, so it never reads or touches the crew's X sign-in file (`$BOTS_HOME/dispatch/x_signin.json`). Never copy, move or print that file.
 - Run every script with this bot's name in front: `CREW_BOT="Analytics Log" python3 ...`. Each request is booked to that name in the spend ledger. Without it the script refuses to run and nothing is sent to X.
-- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. Foreman redoes the one sign-in for the whole crew. Never sign in from this bot.
+- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. In a Foreman crew, Foreman redoes the one sign-in for the whole crew and this bot never signs in. Set up from its individual template, it has no X API sign-in; ask the owner to sign the bot's browser in to X again.
 - If hosted lists are on, run `CREW_BOT="Analytics Log" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
 ## What you do

@@ -1,4 +1,4 @@
-# X Bot Crew, set up by Foreman
+# X Bot Crew: Foreman and seven standalone bot templates
 
 A crew of small read only bots for your X account. They read your account through the official X API and hand you lists. They never post, reply, like, follow, unfollow, DM, block or mute. You do all of that yourself.
 
@@ -6,13 +6,18 @@ Built with Grok Bot and AI tools.
 
 ## What it is
 
-You install one bot, Foreman. Foreman explains the crew, asks you a few questions, builds the bots you pick, tests each one and hands you a front desk bot called Dispatch. After that you talk to Dispatch.
+There are eight separate templates. All of them download from the same pinned GitHub release.
+
+- **Foreman** sets up the whole crew. You install one bot, Foreman. It explains the crew, asks you a few questions, builds the bots you pick, tests each one and hands you a front desk bot called Dispatch. After that you talk to Dispatch. The crew shares one X sign-in, one spend ledger and one daily cap.
+- **Seven individual templates**: Follow Audit, Follow Finder, Shoutout Picker, Reply Queue, Fan Finder, Rerun Picker and Analytics Log. Each one is its own template and sets itself up alone, with its own X sign-in, its own spend ledger and its own daily spend cap. See "Individual bot templates" below.
+
+Pick one: either Foreman for the crew, or one or more individual templates. They are separate setups.
 
 ## The bots
 
 | Bot | What it does | Rough cost |
 |---|---|---|
-| Dispatch (required) | Your front desk. Runs or explains any bot, keeps the shared spend ledger, posts a daily spend line. | $0 |
+| Dispatch (Foreman crew only) | Your front desk. Runs or explains any bot, keeps the shared spend ledger, posts a daily spend line. | $0 |
 | Follow Audit | Tracks followers and following. Lists inactive, dormant and gone accounts and who unfollowed. Never unfollows. | About $0.13 a day, plus about $0.65 to $1.00 per 1,000 accounts for a full scan |
 | Follow Finder | Finds creators in your niche and size range worth following. Has a Never show button. | About $0.45 a run, about $13.50 a month daily |
 | Shoutout Picker | Weekly list of mutuals and supporters worth a shoutout. Needs Follow Audit. | About $0.21 a week |
@@ -81,17 +86,17 @@ What each bot says when a cap stops it:
 
 If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` the same way. See `site/HOSTING.md`.
 
-## Install
+## Install the Foreman template (whole crew)
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v0.3.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v0.3.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v0.3.0` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.0.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.0.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.0.0` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
 
 ## Raising the cap for one day
 
-Some jobs, like a Follow Audit full scan, cost more than a normal day. Tell Dispatch something like "raise the cap to $2 for today". Dispatch repeats the amount and the date and waits for your yes. The raise is logged in the spend ledger and every bot honors it until midnight in your timezone. Then the normal cap is back by itself.
+Some jobs, like a Follow Audit full scan, cost more than a normal day. In a Foreman crew, tell Dispatch something like "raise the cap to $2 for today". Dispatch repeats the amount and the date and waits for your yes. The raise is logged in the spend ledger and every bot honors it until midnight in your timezone. Then the normal cap is back by itself. An individual template does the same for its own cap: it repeats the amount and date, waits for your yes and runs `bot_spend.py raise`.
 
 ## Analytics Log needs the browser
 
@@ -109,16 +114,16 @@ Lists can live on a private Cloudflare Pages site behind Cloudflare Access, with
 4. Flag anything missing or failed. Never leave it blank.
 5. Raw files and pulls are never overwritten.
 
-## One bot at a time
+## Individual bot templates
 
-You can install just one bot instead of the whole crew. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup". Then it runs `sh foreman/fetch_release.sh v0.3.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+Each of the seven bots is also its own template. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
 
-How a bot alone handles money and sign-in:
+How an individual template handles money and sign-in:
 
-- It has its own daily cap and its own ledger in its own folder. The one-day raise works the same way, with `bot_spend.py raise`. It ends at midnight in your timezone by itself.
-- It does its own X sign-in and saves it in its own folder. Renewal uses the same lock as the crew file.
-- If Dispatch or Foreman is already installed (`$BOTS_HOME/dispatch/crew.json` or the shared ledger exists), the bot uses the shared ledger, the crew's cap and the crew's one sign-in instead. Nothing is copied.
-- A second sign-in to the same X app cancels the first. If you run two bots alone on one X app, they will knock each other out. Install Dispatch so they share one sign-in, or give each its own X app.
+- It has its own daily spend cap and its own ledger in its own folder. The one-day raise works with `bot_spend.py raise`. It ends at midnight in your timezone by itself.
+- It does its own X sign-in and saves it in its own folder, renewed under a lock.
+- A second sign-in to the same X app cancels the first. If you set up more than one individual template, give each one its own X app so they do not knock each other out.
+- Install an individual template under its own `BOTS_HOME`, not inside a Foreman crew's folder.
 - You see the cost before anything paid runs.
 
 | Bot | Files (inside foreman/) | Secrets | X scopes | Browser | Works with |
@@ -131,24 +136,24 @@ How a bot alone handles money and sign-in:
 | Rerun Picker | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `rerun-picker/rerun_picker.py`, `rerun-picker/instructions.md`, `rerun-picker/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | nothing else |
 | Analytics Log | `analytics-log/x_analytics.py`, `analytics-log/instructions.md`, `analytics-log/routine.json` | none | none | yes, signed in to X | nothing else |
 
-Every bot also gets `README.md`, `config.example.json`, `foreman/standalone.json`, `foreman/fetch_release.sh` and its own `guides/<slug>.md`.
+Every bot also gets `README.md`, `LICENSE`, `config.example.json`, `foreman/standalone.json`, `foreman/fetch_release.sh` and its own `guides/<slug>.md`.
 
 Bot by bot notes:
 
 - Shoutout Picker without Follow Audit offers its own follower scan, with the cost shown first, or installing Follow Audit.
 - Fan Finder without Reply Queue makes its own pull and tells you it costs about the same as one Reply Queue run.
 - Analytics Log uses no X API and no secrets. It needs the bot's browser signed in to X, which you do yourself.
-- Follow Audit's script is in every X bot's files because it holds the shared X client, the cap and the sign-in.
+- Follow Audit's script is in every X bot's files because it holds the X client, the cap and the sign-in code each bot uses.
 
 ## Package layout
 
 - `foreman/` Foreman's instructions and the bot catalog
 - one folder per bot with its script, `instructions.md` and `routine.json`
-- `guides/` one short setup guide per bot for installing it alone
-- `foreman/standalone.json` and `foreman/fetch_release.sh` the one bot at a time file lists and download
+- `guides/` one short setup guide per individual template
+- `foreman/standalone.json` and `foreman/fetch_release.sh` the individual template file lists and the download script
 - `site/` the list publisher and hosting guide
 - `config.example.json` every setting Foreman will ask about
 
 ## License
 
-No license is included.
+MIT License. Copyright (c) 2026 Glenn Williams. See `LICENSE`.

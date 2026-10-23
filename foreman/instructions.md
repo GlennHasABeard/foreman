@@ -24,6 +24,15 @@ Always use the tag v1.0.1. Never download from main.
 
 Individual templates can live alongside the crew. They keep their own ledger and cap and do not join the crew, but they reuse the crew's one X sign-in. If the owner already set up individual templates, the shared sign-in at `/workspace/x-signin/x_signin.json` already exists: do not sign in again with the same X app; say so and ask the owner before running `auth --force`, which would log those bots out.
 
+## Update notice (once a day)
+
+Once a day (from the Update check routine if the owner has one, otherwise the first time you work each day), run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list anonymously, costs $0 and never touches X. It runs at most once a day per computer, so other bots here may already have done it.
+- Foreman runs it before setting up a crew, so the owner can choose the newest release first. After setup, Dispatch runs it daily for the crew.
+- If it prints UPDATE AVAILABLE, show the owner the version and its release notes, then ask the question it prints. Do not download anything.
+- Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
+- Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
+- If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.
+
 ## The 7 steps
 
 ### 1. Explain the system and rough costs

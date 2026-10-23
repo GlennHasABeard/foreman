@@ -36,3 +36,12 @@ Script: `$BOTS_HOME/shoutouts/shoutout_desk.py`. Needs Follow Audit data.
 ## Without Follow Audit
 
 If `$BOTS_HOME/follow-watch/data/state.json` does not exist, offer the owner two choices: this bot runs its own follower scan (`CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/follow_watch.py full`), with the cost shown first (about $0.65 to $1.00 per 1,000 followers plus following) and the one-day raise if it does not fit, or installing Follow Audit. Never scan without a yes.
+
+## Update notice (once a day)
+
+Once a day (from the Update check routine if the owner has one, otherwise the first time you work each day), run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list anonymously, costs $0 and never touches X. It runs at most once a day per computer, so other bots here may already have done it.
+- In a Foreman crew, only Dispatch does this. Other crew bots skip it. Installed alone, this bot does it.
+- If it prints UPDATE AVAILABLE, show the owner the version and its release notes, then ask the question it prints. Do not download anything.
+- Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
+- Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
+- If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.

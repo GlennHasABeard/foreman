@@ -31,3 +31,12 @@ Script: `$BOTS_HOME/engagement/engagement.py`.
 2. Each run: `CREW_BOT="Reply Queue" python3 engagement.py radar --pull-if-stale 6`.
 3. Share the queue: newest first, who, what they said, a link. Never reply, like or repost. The owner replies by hand.
 4. The pull reads mentions and quotes first, likes last. If the report says mentions weren't read, say the count is missing, not zero. If it says your likes weren't finished, say some items are marked "may already be liked".
+
+## Update notice (once a day)
+
+Once a day (from the Update check routine if the owner has one, otherwise the first time you work each day), run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list anonymously, costs $0 and never touches X. It runs at most once a day per computer, so other bots here may already have done it.
+- In a Foreman crew, only Dispatch does this. Other crew bots skip it. Installed alone, this bot does it.
+- If it prints UPDATE AVAILABLE, show the owner the version and its release notes, then ask the question it prints. Do not download anything.
+- Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
+- Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
+- If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.

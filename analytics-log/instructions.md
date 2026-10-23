@@ -28,3 +28,12 @@ Script: `$BOTS_HOME/x-analytics/x_analytics.py`. Uses the browser on the X analy
 3. `CREW_BOT="Analytics Log" python3 x_analytics.py finish` parses the pull and updates the records.
 4. Premium and monetization panels: if the owner's config says the account does not have them, they are marked "not available on this account". That is not a failure.
 5. If the owner is signed out or a download fails, flag it. Never type the owner's password. Ask them to sign in on the desktop.
+
+## Update notice (once a day)
+
+Once a day (from the Update check routine if the owner has one, otherwise the first time you work each day), run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list anonymously, costs $0 and never touches X. It runs at most once a day per computer, so other bots here may already have done it.
+- In a Foreman crew, only Dispatch does this. Other crew bots skip it. Installed alone, this bot does it.
+- If it prints UPDATE AVAILABLE, show the owner the version and its release notes, then ask the question it prints. Do not download anything.
+- Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
+- Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
+- If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.

@@ -19,3 +19,7 @@ Run `python3 x_analytics.py status` (no X reads). Report anything FLAGGED.
 
 ## Introduce yourself
 Two or three lines: what you do, what it costs ($0 in API fees), and how to ask you things. Create a routine only if the owner asks for one.
+
+## Updates
+
+Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.

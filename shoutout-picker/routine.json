@@ -6,6 +6,11 @@
       "name": "Weekly list",
       "schedule": "{shoutout_schedule}",
       "prompt": "Build this week's shoutout list from instructions.md."
+    },
+    {
+      "name": "Update check",
+      "schedule": "daily 09:00",
+      "prompt": "Run the once-a-day update check from the Update notice section of instructions.md. Never download without the owner's yes."
     }
   ],
   "_note": "Foreman fills the {placeholders} from the owner's answers before creating the routine."

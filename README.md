@@ -88,6 +88,8 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 
 ## Install the Foreman template (whole crew)
 
+Get the Foreman template: [Foreman](https://x.ai/bot/Hfm0xbUx8FqPTd5EYvjat)
+
 1. Set up your X developer app as above.
 2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.0.1` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.0.1, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.0.1` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
@@ -116,7 +118,17 @@ Lists can live on a private Cloudflare Pages site behind Cloudflare Access, with
 
 ## Individual bot templates
 
-Each of the seven bots is also its own template. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.1 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+Each of the seven bots is also its own template. Open the bot's template link below to add it to your Grok Bot.
+
+- [Follow Audit](https://x.ai/bot/qoui6HKCTOoftCJiKRNst)
+- [Follow Finder](https://x.ai/bot/szTOTq23uRdBePSzOTS60)
+- [Shoutout Picker](https://x.ai/bot/iFPUcEJn39iKpKT20ba_0)
+- [Reply Queue](https://x.ai/bot/v1dE8QQMdgiuvtiLB9Y4Z)
+- [Fan Finder](https://x.ai/bot/9w5dYupGvP4sbxf9mTEUu)
+- [Rerun Picker](https://x.ai/bot/M2jbahUCQCsNqdgGxAIj2)
+- [Analytics Log](https://x.ai/bot/TuAu34Lz2_zupuT5qlai3)
+
+The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.1 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
 
 How an individual template handles money and sign-in:
 

@@ -19,6 +19,10 @@ Sorts replies and mentions worth answering.
 - If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. Foreman redoes the one sign-in for the whole crew. Never sign in from this bot.
 - If hosted lists are on, run `CREW_BOT="Reply Queue" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
+## Installed alone
+
+If this bot was installed by itself (no Dispatch or Foreman), `CREW_BOT="Reply Queue" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/engagement/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/reply-queue.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`. If Dispatch or Foreman is installed later, the bot switches to the shared ledger, cap and sign-in by itself.
+
 ## What you do
 
 Script: `$BOTS_HOME/engagement/engagement.py`.

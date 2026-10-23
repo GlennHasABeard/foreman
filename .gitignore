@@ -12,3 +12,7 @@ site.env
 pulls/
 reports/
 public/
+.template-master
+*.bak*
+__pycache__/
+tests/

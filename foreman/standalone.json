@@ -1,0 +1,224 @@
+{
+  "_about": "One bot at a time. Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
+  "version": "v0.3.0",
+  "install_targets": {
+    "follow-audit/follow_watch.py": "follow-watch",
+    "follow-audit/x_prices.py": "follow-watch",
+    "follow-audit/bot_spend.py": "follow-watch"
+  },
+  "bots": [
+    {
+      "slug": "follow-audit",
+      "name": "Follow Audit",
+      "folder": "follow-watch",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/follow-audit.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "follow-audit/instructions.md",
+        "follow-audit/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access"
+      ],
+      "browser": false,
+      "works_with": [],
+      "note": "Holds the X client every other bot uses."
+    },
+    {
+      "slug": "follow-finder",
+      "name": "Follow Finder",
+      "folder": "creator-scout",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/follow-finder.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "follow-finder/creator_scout.py",
+        "follow-finder/instructions.md",
+        "follow-finder/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access"
+      ],
+      "browser": false,
+      "works_with": [
+        "follow-audit (optional, for follows-you marks)"
+      ],
+      "note": ""
+    },
+    {
+      "slug": "shoutout-picker",
+      "name": "Shoutout Picker",
+      "folder": "shoutouts",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/shoutout-picker.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "shoutout-picker/shoutout_desk.py",
+        "shoutout-picker/instructions.md",
+        "shoutout-picker/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access"
+      ],
+      "browser": false,
+      "works_with": [
+        "follow-audit (optional, or its own follower scan)"
+      ],
+      "note": "Without Follow Audit it offers its own follower scan, cost shown first, or installing Follow Audit."
+    },
+    {
+      "slug": "reply-queue",
+      "name": "Reply Queue",
+      "folder": "engagement",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/reply-queue.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "reply-queue/engagement.py",
+        "reply-queue/instructions.md",
+        "reply-queue/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access",
+        "like.read"
+      ],
+      "browser": false,
+      "works_with": [],
+      "note": ""
+    },
+    {
+      "slug": "fan-finder",
+      "name": "Fan Finder",
+      "folder": "engagement",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/fan-finder.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "reply-queue/engagement.py",
+        "fan-finder/instructions.md",
+        "fan-finder/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access",
+        "like.read"
+      ],
+      "browser": false,
+      "works_with": [
+        "reply-queue (optional, reuses its pull)"
+      ],
+      "note": "Without Reply Queue it makes its own pull and says what it costs."
+    },
+    {
+      "slug": "rerun-picker",
+      "name": "Rerun Picker",
+      "folder": "reruns",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/rerun-picker.md",
+        "follow-audit/follow_watch.py",
+        "follow-audit/x_prices.py",
+        "follow-audit/bot_spend.py",
+        "rerun-picker/rerun_picker.py",
+        "rerun-picker/instructions.md",
+        "rerun-picker/routine.json"
+      ],
+      "secrets": [
+        "X_CLIENT_ID",
+        "X_CLIENT_SECRET"
+      ],
+      "x_scopes": [
+        "tweet.read",
+        "users.read",
+        "follows.read",
+        "offline.access"
+      ],
+      "browser": false,
+      "works_with": [],
+      "note": ""
+    },
+    {
+      "slug": "analytics-log",
+      "name": "Analytics Log",
+      "folder": "x-analytics",
+      "files": [
+        "README.md",
+        "config.example.json",
+        "foreman/standalone.json",
+        "foreman/fetch_release.sh",
+        "guides/analytics-log.md",
+        "analytics-log/x_analytics.py",
+        "analytics-log/instructions.md",
+        "analytics-log/routine.json"
+      ],
+      "secrets": [],
+      "x_scopes": [],
+      "browser": true,
+      "works_with": [],
+      "note": "No X API use. Needs the bot's browser signed in to X."
+    }
+  ]
+}

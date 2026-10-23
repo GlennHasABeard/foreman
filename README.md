@@ -84,7 +84,7 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 ## Install
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v0.2.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v0.2.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v0.2.0` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v0.3.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v0.3.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v0.3.0` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -109,10 +109,43 @@ Lists can live on a private Cloudflare Pages site behind Cloudflare Access, with
 4. Flag anything missing or failed. Never leave it blank.
 5. Raw files and pulls are never overwritten.
 
+## One bot at a time
+
+You can install just one bot instead of the whole crew. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup". Then it runs `sh foreman/fetch_release.sh v0.3.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+
+How a bot alone handles money and sign-in:
+
+- It has its own daily cap and its own ledger in its own folder. The one-day raise works the same way, with `bot_spend.py raise`. It ends at midnight in your timezone by itself.
+- It does its own X sign-in and saves it in its own folder. Renewal uses the same lock as the crew file.
+- If Dispatch or Foreman is already installed (`$BOTS_HOME/dispatch/crew.json` or the shared ledger exists), the bot uses the shared ledger, the crew's cap and the crew's one sign-in instead. Nothing is copied.
+- A second sign-in to the same X app cancels the first. If you run two bots alone on one X app, they will knock each other out. Install Dispatch so they share one sign-in, or give each its own X app.
+- You see the cost before anything paid runs.
+
+| Bot | Files (inside foreman/) | Secrets | X scopes | Browser | Works with |
+|---|---|---|---|---|---|
+| Follow Audit | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `follow-audit/instructions.md`, `follow-audit/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | nothing else |
+| Follow Finder | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `follow-finder/creator_scout.py`, `follow-finder/instructions.md`, `follow-finder/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | follow-audit (optional, for follows-you marks) |
+| Shoutout Picker | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `shoutout-picker/shoutout_desk.py`, `shoutout-picker/instructions.md`, `shoutout-picker/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | follow-audit (optional, or its own follower scan) |
+| Reply Queue | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `reply-queue/engagement.py`, `reply-queue/instructions.md`, `reply-queue/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access, like.read | no | nothing else |
+| Fan Finder | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `reply-queue/engagement.py`, `fan-finder/instructions.md`, `fan-finder/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access, like.read | no | reply-queue (optional, reuses its pull) |
+| Rerun Picker | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `rerun-picker/rerun_picker.py`, `rerun-picker/instructions.md`, `rerun-picker/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | nothing else |
+| Analytics Log | `analytics-log/x_analytics.py`, `analytics-log/instructions.md`, `analytics-log/routine.json` | none | none | yes, signed in to X | nothing else |
+
+Every bot also gets `README.md`, `config.example.json`, `foreman/standalone.json`, `foreman/fetch_release.sh` and its own `guides/<slug>.md`.
+
+Bot by bot notes:
+
+- Shoutout Picker without Follow Audit offers its own follower scan, with the cost shown first, or installing Follow Audit.
+- Fan Finder without Reply Queue makes its own pull and tells you it costs about the same as one Reply Queue run.
+- Analytics Log uses no X API and no secrets. It needs the bot's browser signed in to X, which you do yourself.
+- Follow Audit's script is in every X bot's files because it holds the shared X client, the cap and the sign-in.
+
 ## Package layout
 
 - `foreman/` Foreman's instructions and the bot catalog
 - one folder per bot with its script, `instructions.md` and `routine.json`
+- `guides/` one short setup guide per bot for installing it alone
+- `foreman/standalone.json` and `foreman/fetch_release.sh` the one bot at a time file lists and download
 - `site/` the list publisher and hosting guide
 - `config.example.json` every setting Foreman will ask about
 

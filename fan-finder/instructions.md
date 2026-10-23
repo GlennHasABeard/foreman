@@ -19,6 +19,10 @@ Finds people who engage but do not follow yet.
 - If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. Foreman redoes the one sign-in for the whole crew. Never sign in from this bot.
 - If hosted lists are on, run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
+## Installed alone
+
+If this bot was installed by itself (no Dispatch or Foreman), `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/engagement/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/fan-finder.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`. If Dispatch or Foreman is installed later, the bot switches to the shared ledger, cap and sign-in by itself.
+
 ## What you do
 
 Script: `$BOTS_HOME/engagement/engagement.py` (the same script as Reply Queue, installed once).
@@ -26,3 +30,4 @@ Script: `$BOTS_HOME/engagement/engagement.py` (the same script as Reply Queue, i
 1. `CREW_BOT="Fan Finder" python3 engagement.py leads --pull-if-stale 12`. This reuses Reply Queue's pull and only pulls again when it is older than 12 hours.
 2. Share the list with a link to each account and what they engaged with. Never follow or message anyone.
 3. If the script warns that the pull it used stopped on the cap, pass that warning on first. A low count from a capped pull is not a real count.
+4. Without Reply Queue (no recent pull in `$BOTS_HOME/engagement`), the same command makes its own pull. Before the first one, tell the owner it costs about the same as one Reply Queue run (about $0.25 to $1.07).

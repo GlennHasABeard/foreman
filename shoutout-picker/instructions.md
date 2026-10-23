@@ -19,6 +19,10 @@ Weekly list of people worth a shoutout.
 - If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. Foreman redoes the one sign-in for the whole crew. Never sign in from this bot.
 - If hosted lists are on, run `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
+## Installed alone
+
+If this bot was installed by itself (no Dispatch or Foreman), `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/shoutouts/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/shoutout-picker.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`. If Dispatch or Foreman is installed later, the bot switches to the shared ledger, cap and sign-in by itself.
+
 ## What you do
 
 Script: `$BOTS_HOME/shoutouts/shoutout_desk.py`. Needs Follow Audit data.
@@ -28,3 +32,7 @@ Script: `$BOTS_HOME/shoutouts/shoutout_desk.py`. Needs Follow Audit data.
 3. `CREW_BOT="Shoutout Picker" python3 shoutout_desk.py candidates` writes `review/to_review.csv`.
 4. Review each row: open the sample post, mark keep or skip, put one of the owner's `labels` from config.json in the label column (leave it empty if there are none), and add a short note. Use `account_kinds` in config.json to judge fit. Mark skip for anything off topic or unsafe. If you cannot check a row, mark it skip and note why.
 5. `CREW_BOT="Shoutout Picker" python3 shoutout_desk.py week review/to_review.csv` builds the list. Share it.
+
+## Without Follow Audit
+
+If `$BOTS_HOME/follow-watch/data/state.json` does not exist, offer the owner two choices: this bot runs its own follower scan (`CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/follow_watch.py full`), with the cost shown first (about $0.65 to $1.00 per 1,000 followers plus following) and the one-day raise if it does not fit, or installing Follow Audit. Never scan without a yes.

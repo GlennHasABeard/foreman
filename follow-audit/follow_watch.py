@@ -274,8 +274,67 @@ def file_lock(path):
 # overrun the cap or lose each other's writes.
 # ----------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------
+# Crew or one bot alone. If Dispatch or Foreman is installed (crew.json or the shared
+# ledger exists in $BOTS_HOME/dispatch), every bot uses the shared ledger, the crew's
+# cap and the crew's one sign-in. Otherwise the bot is alone ("standalone") and keeps
+# its own ledger, its own cap (from its own config.json) and its own sign-in file in
+# its own folder, with the same file locks and the same one-day raise.
+# ----------------------------------------------------------------------------
+
+# Each bot's folder under $BOTS_HOME. Reply Queue and Fan Finder share engagement/.
+BOT_FOLDERS = {
+    "Dispatch": "dispatch", "Foreman": "dispatch", "Follow Audit": "follow-watch",
+    "Follow Finder": "creator-scout", "Shoutout Picker": "shoutouts", "Reply Queue": "engagement",
+    "Fan Finder": "engagement", "Rerun Picker": "reruns", "Analytics Log": "x-analytics",
+}
+
+
+def shared_dir():
+    return os.path.join(BOTS_HOME, "dispatch")
+
+
+def crew_mode():
+    """'shared' when Dispatch or Foreman is installed, else 'standalone'."""
+    d = shared_dir()
+    if os.path.exists(os.path.join(d, "crew.json")) or os.path.exists(os.path.join(d, "spend_ledger.json")):
+        return "shared"
+    return "standalone"
+
+
+def _slug(name):
+    return name.lower().replace(" ", "-")
+
+
+def bot_dir(name=None):
+    """Where this bot keeps its own ledger and sign-in when it is alone."""
+    name = name or (os.environ.get("CREW_BOT") or "").strip()
+    folder = BOT_FOLDERS.get(name)
+    if not folder:
+        raise SystemExit(f"Unknown bot {name!r}. Set CREW_BOT to one of: {', '.join(CREW_BOTS)}.")
+    return os.path.join(BOTS_HOME, folder)
+
+
 def ledger_path():
-    return os.environ.get("SPEND_LEDGER", os.path.join(BOTS_HOME, "dispatch", "spend_ledger.json"))
+    if os.environ.get("SPEND_LEDGER"):
+        return os.environ["SPEND_LEDGER"]
+    if crew_mode() == "shared":
+        return os.path.join(shared_dir(), "spend_ledger.json")
+    name = (os.environ.get("CREW_BOT") or "").strip()
+    return os.path.join(bot_dir(name), f"spend_ledger.{_slug(name)}.json")
+
+
+def apply_crew(cfg):
+    """In a crew, the cap and timezone come from crew.json, so every bot shares one cap.
+    Alone, the bot's own config.json values stand."""
+    p = os.path.join(shared_dir(), "crew.json")
+    if crew_mode() == "shared" and os.path.exists(p):
+        with open(p, encoding="utf-8") as f:
+            crew = json.load(f)
+        for k in ("daily_spend_cap", "timezone"):
+            if crew.get(k) is not None:
+                cfg[k] = crew[k]
+    return cfg
 
 
 def crew_now(tz):
@@ -352,7 +411,7 @@ def response_cost(cfg, path, body, owner_id=None, owned=None):
 
 
 def owner_path():
-    return os.path.join(BOTS_HOME, "dispatch", "owner.json")
+    return os.path.join(os.path.dirname(signin_path()), "owner.json")
 
 
 def read_owner_id():
@@ -411,7 +470,10 @@ SIGNIN_KEYS = ("access_token", "refresh_token", "expires_at", "scope", "saved_at
 
 
 def signin_path():
-    return os.path.join(BOTS_HOME, "dispatch", "x_signin.json")
+    """The crew's one sign-in in a crew. Alone, the bot's own file in its own folder."""
+    if crew_mode() == "shared":
+        return os.path.join(shared_dir(), "x_signin.json")
+    return os.path.join(bot_dir(), "x_signin.json")
 
 
 def read_signin():
@@ -436,7 +498,8 @@ class XClient:
     def __init__(self, store, cfg, meter):
         self.who = crew_bot()  # fails closed before anything else
         self.store = store
-        self.cfg = cfg
+        self.cfg = apply_crew(cfg)
+        self.mode = crew_mode()
         self.meter = meter
         self.app = {k: os.environ.get(env) for k, env in (("client_id", "X_CLIENT_ID"),
                                                           ("client_secret", "X_CLIENT_SECRET"))}
@@ -1423,7 +1486,7 @@ PASTE_WAIT_SECONDS = 600
 
 def paste_inbox():
     """Named pipe the waiting sign-in reads pasted addresses from. Exists only while auth waits."""
-    return os.path.join(BOTS_HOME, "dispatch", ".signin_paste")
+    return os.path.join(os.path.dirname(signin_path()), ".signin_paste")
 
 
 def cmd_auth_paste(address):
@@ -1545,7 +1608,7 @@ def cmd_auth(store, cfg, client, paste, handle=None):
     print("2. Backup, only if the page after Authorize doesn't load: copy the full address from the address bar "
           "and paste it right away. You have about 30 seconds before X's one-time code expires. "
           "It is swapped for the sign-in the moment it is pasted. The bot hands it over with:\n"
-          f"   CREW_BOT=\"Foreman\" python3 {os.path.abspath(__file__)} auth-paste \"<the full address>\"\n",
+          f"   CREW_BOT=\"{client.who}\" python3 {os.path.abspath(__file__)} auth-paste \"<the full address>\"\n",
           flush=True)
 
     def ready():
@@ -1567,7 +1630,7 @@ def cmd_auth(store, cfg, client, paste, handle=None):
         raise SystemExit(f"X refused the code (HTTP {e.code}). It most likely expired (about 30 seconds). "
                          "Run auth again and approve in the bot's browser, or paste faster.")
     print(f"Code from {source} swapped for a sign-in. Saved to {signin_path()} (owner-only permissions), "
-          "the one sign-in the whole crew shares.")
+          + ("the one sign-in the whole crew shares." if crew_mode() == "shared" else "this bot's own sign-in (it is alone, no Dispatch or Foreman found)."))
     me = client.me()
     pm = me.get("public_metrics") or {}
     print(f"Signed in as @{me['username']}. Scopes: {client.tok.get('scope')}. "

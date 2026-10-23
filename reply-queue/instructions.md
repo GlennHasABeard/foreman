@@ -16,12 +16,12 @@ Sorts replies and mentions worth answering.
 - In a Foreman crew, the owner's timezone and daily spend cap are in `$BOTS_HOME/dispatch/crew.json`. Set up from its individual template, they are in this bot's own config.json (see below).
 - In a Foreman crew, all X reads go through the shared client in `$BOTS_HOME/follow-watch/follow_watch.py`, using the crew's one X sign-in at `$BOTS_HOME/dispatch/x_signin.json` (owned by Dispatch). Never copy, move or print that file. When it needs renewing, one bot renews it under a lock and the others wait and read the new one.
 - Run every script with this bot's name in front: `CREW_BOT="Reply Queue" python3 ...`. Each request is booked to that name in the spend ledger. Without it the script refuses to run and nothing is sent to X.
-- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. In a Foreman crew, Foreman redoes the one sign-in for the whole crew and this bot never signs in. Set up from its individual template, this bot redoes its own sign-in (see its guide).
+- If a script says "X sign-in needs to be redone", stop and tell the owner exactly that. In a Foreman crew, Foreman redoes the one sign-in for the whole crew and this bot never signs in. Set up from its individual template, this bot redoes the shared individual sign-in (see its guide).
 - If hosted lists are on, run `CREW_BOT="Reply Queue" python3 $BOTS_HOME/site/publish_lists.py` after a run that changed a list, then share the list link. If hosting is off, put the list in chat as a short table.
 
 ## Installed alone
 
-If this bot was set up from its individual template (no Foreman crew), `CREW_BOT="Reply Queue" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/engagement/config.json`, the ledger and the X sign-in are this bot's own files in that folder, and this bot runs its own sign-in (see `guides/reply-queue.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
+If this bot was set up from its individual template (even if a Foreman crew is also here), `CREW_BOT="Reply Queue" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/engagement/config.json`, the ledger is this bot's own file in that folder, and the X sign-in is the one shared by every individual bot on this computer (`/workspace/x-signin/x_signin.json`, or a Foreman crew's `dispatch/x_signin.json` if there is one). If it ever needs redoing, this bot redoes it (see `guides/reply-queue.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
 
 ## What you do
 

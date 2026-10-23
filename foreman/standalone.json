@@ -1,6 +1,6 @@
 {
-  "_about": "Individual bot templates, each set up alone with its own sign-in and spend cap. Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
-  "version": "v1.0.0",
+  "_about": "Individual bot templates, each with its own ledger and spend cap. They share one X sign-in per Grok Bot computer (/workspace/x-signin/x_signin.json, or a Foreman crew's dispatch/x_signin.json if one exists). Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
+  "version": "v1.0.1",
   "install_targets": {
     "follow-audit/follow_watch.py": "follow-watch",
     "follow-audit/x_prices.py": "follow-watch",

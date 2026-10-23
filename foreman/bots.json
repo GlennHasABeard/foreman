@@ -22,7 +22,7 @@
     {"slug": "shoutout-picker", "name": "Shoutout Picker", "required": false, "folder": "shoutouts", "scripts": ["shoutout_desk.py"],
      "does": "Once a week builds a list of mutuals and supporters worth a shoutout, skipping anyone you featured recently.",
      "x_reads": "uses Follow Audit data plus a small refresh",
-     "cost_per_run": 0.21, "default_runs_per_month": 4.3, "cost_note": "About $0.21 a week, under $1 a month. Needs Follow Audit.",
+     "cost_per_run": 0.21, "default_runs_per_month": 4.3, "cost_note": "About $0.21 a week, under $1 a month. Uses Follow Audit if installed, or runs its own follower scan.",
      "needs": ["follow-audit"],
      "questions": ["account_kinds", "labels", "min_followers", "max_followers", "list_size"],
      "schedule_question": "Which day and time each week?"},

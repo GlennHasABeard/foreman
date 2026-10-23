@@ -7,7 +7,10 @@ Commands
   auth    One-time sign-in for the whole crew. Requests read-only scopes (tweet.read
           users.read follows.read offline.access, plus like.read with --likes) and
           saves one refreshable sign-in at $BOTS_HOME/dispatch/x_signin.json, owned by
-          Dispatch and shared by every bot. Main path: approve in the bot's own browser,
+          Dispatch and shared by every bot. Individual templates save to the shared
+          /workspace/x-signin/x_signin.json (X_SIGNIN_DIR) instead. Refuses if a sign-in
+          already exists (use signin-check), unless --force.
+  signin-check  Reuse the sign-in already on this computer with one account read. Main path: approve in the bot's own browser,
           which comes back to the local listener. Backup: paste the address the browser
           landed on (`auth-paste '<address>'`, or stdin with --paste). The code is
           swapped the moment it arrives; X gives about 30 seconds.
@@ -294,8 +297,22 @@ def shared_dir():
     return os.path.join(BOTS_HOME, "dispatch")
 
 
+def individual_marker(name=None):
+    """Set up from an individual template: `bot_spend.py individual` writes this marker."""
+    name = name or (os.environ.get("CREW_BOT") or "").strip()
+    return os.path.join(bot_dir(name), f".individual-{_slug(name)}")
+
+
+def is_individual():
+    name = (os.environ.get("CREW_BOT") or "").strip()
+    return bool(name) and name in BOT_FOLDERS and os.path.exists(individual_marker(name))
+
+
 def crew_mode():
-    """'shared' when Dispatch or Foreman is installed, else 'standalone'."""
+    """'shared' when Dispatch or Foreman is installed (and this bot is a crew bot), else 'standalone'.
+    A bot set up from its individual template is always 'standalone': its own ledger and cap."""
+    if is_individual():
+        return "standalone"
     d = shared_dir()
     if os.path.exists(os.path.join(d, "crew.json")) or os.path.exists(os.path.join(d, "spend_ledger.json")):
         return "shared"
@@ -469,11 +486,46 @@ SIGNIN_REDO = "X sign-in needs to be redone"
 SIGNIN_KEYS = ("access_token", "refresh_token", "expires_at", "scope", "saved_at")
 
 
-def signin_path():
-    """The crew's one sign-in in a crew. Alone, the bot's own file in its own folder."""
+# Individual templates on the same Grok Bot computer share one sign-in file too, so one X app
+# covers every bot there. Each bot still keeps its own ledger and cap.
+def individual_signin_path():
+    return os.path.join(os.environ.get("X_SIGNIN_DIR", "/workspace/x-signin"), "x_signin.json")
+
+
+def crew_signin_candidates():
+    env = os.environ.get("FOREMAN_CREW_HOME")  # one or more crew BOTS_HOMEs, colon separated
+    homes = env.split(":") if env else [BOTS_HOME, "/workspace"]
+    out = []
+    for h in homes:
+        if h:
+            c = os.path.join(h.rstrip("/"), "dispatch", "x_signin.json")
+            if c not in out:
+                out.append(c)
+    return out
+
+
+def signin_source():
+    """(kind, path). Crew bots: the crew file. Individual or alone, in this order: the shared
+    individual file, a Foreman crew's file, this bot's old own file (v0.3.0 to v1.0.0), else
+    none, in which case `auth` saves to the shared individual file."""
     if crew_mode() == "shared":
-        return os.path.join(shared_dir(), "x_signin.json")
-    return os.path.join(bot_dir(), "x_signin.json")
+        return "crew", os.path.join(shared_dir(), "x_signin.json")
+    shared = individual_signin_path()
+    if os.path.exists(shared):
+        return "shared", shared
+    for c in crew_signin_candidates():
+        if os.path.exists(c):
+            return "crew", c
+    name = (os.environ.get("CREW_BOT") or "").strip()
+    if name in BOT_FOLDERS:
+        old = os.path.join(bot_dir(name), "x_signin.json")
+        if os.path.exists(old):
+            return "own", old
+    return "none", shared
+
+
+def signin_path():
+    return signin_source()[1]
 
 
 def read_signin():
@@ -486,7 +538,9 @@ def read_signin():
 
 def write_signin(tok):
     keep = {k: tok[k] for k in SIGNIN_KEYS if k in tok}
-    os.makedirs(os.path.dirname(signin_path()), exist_ok=True)
+    d = os.path.dirname(signin_path())
+    if not os.path.isdir(d):
+        os.makedirs(d, mode=0o700, exist_ok=True)
     write_json(signin_path(), keep, private=True)
 
 
@@ -582,7 +636,7 @@ class XClient:
             disk = read_signin()
             if not disk:
                 raise SystemExit(f"{SIGNIN_REDO}. No sign-in found at {signin_path()}. "
-                                 "Foreman runs `follow_watch.py auth` once for the whole crew.")
+                                 "Run `follow_watch.py auth` once (Foreman does it for a crew).")
             fresh_from_other = disk.get("access_token") and disk.get("access_token") != used
             if not expiring(disk) and (fresh_from_other or not force):
                 self.tok = disk
@@ -1591,7 +1645,27 @@ def wait_for_redirect(redirect, st, stdin_paste, timeout=PASTE_WAIT_SECONDS, rea
                 pass
 
 
-def cmd_auth(store, cfg, client, paste, handle=None):
+def cmd_signin_check(client):
+    """Reuse a sign-in that already exists on this computer: one account read (GET /users/me),
+    booked to this bot's ledger at its x_prices.py price. Never signs in again."""
+    kind, path = signin_source()
+    if kind == "none" or not os.path.exists(path):
+        print(f"No X sign-in found on this computer. Run `follow_watch.py auth` once. It saves to {path}.")
+        sys.exit(2)
+    try:
+        me = client.me()
+    except CapReached as e:
+        print(stopped_line(client.who, e) + " The sign-in was not checked.")
+        sys.exit(3)
+    print(f"Reusing the {kind} X sign-in at {path}. Signed in as @{me['username']}. "
+          "No second sign-in was made. This bot keeps its own ledger and cap.")
+
+
+def cmd_auth(store, cfg, client, paste, handle=None, force=False):
+    kind, path = signin_source()
+    if kind != "none" and os.path.exists(path) and not force:
+        raise SystemExit(f"An X sign-in already exists at {path}. Run `follow_watch.py signin-check` to reuse it. "
+                         "A second sign-in to the same X app would log the first one out.")
     if not client.app.get("client_id"):
         raise SystemExit("Set X_CLIENT_ID (and X_CLIENT_SECRET) as stored secrets first.")
     verifier = secrets.token_urlsafe(64)[:96]
@@ -1630,7 +1704,7 @@ def cmd_auth(store, cfg, client, paste, handle=None):
         raise SystemExit(f"X refused the code (HTTP {e.code}). It most likely expired (about 30 seconds). "
                          "Run auth again and approve in the bot's browser, or paste faster.")
     print(f"Code from {source} swapped for a sign-in. Saved to {signin_path()} (owner-only permissions), "
-          + ("the one sign-in the whole crew shares." if crew_mode() == "shared" else "this bot's own sign-in (it is alone, no Dispatch or Foreman found)."))
+          + ("the one sign-in the whole crew shares." if crew_mode() == "shared" else "the one sign-in every individual bot on this computer shares."))
     me = client.me()
     pm = me.get("public_metrics") or {}
     print(f"Signed in as @{me['username']}. Scopes: {client.tok.get('scope')}. "
@@ -1641,10 +1715,11 @@ def cmd_auth(store, cfg, client, paste, handle=None):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Read-only X follower and following tracker.")
-    p.add_argument("command", choices=["auth", "auth-paste", "full", "light", "daily", "recheck", "report"])
+    p.add_argument("command", choices=["auth", "auth-paste", "signin-check", "full", "light", "daily", "recheck", "report"])
     p.add_argument("address", nargs="?", help="auth-paste: the full address the browser landed on after Authorize")
     p.add_argument("--dir", default=os.environ.get("FW_DIR", BOTS_HOME + "/follow-watch"))
     p.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
+    p.add_argument("--force", action="store_true", help="auth: sign in again even though a sign-in exists (logs the old one out)")
     p.add_argument("--likes", action="store_true", help="auth: add like.read (Reply Queue or Fan Finder chosen)")
     p.add_argument("--followers", action="store_true", help="recheck: include your followers, not only accounts you follow")
     p.add_argument("--limit", type=int, help="full: read only the first N followers and N following (a partial scan, for testing)")
@@ -1679,7 +1754,10 @@ def main(argv=None):
         global SCOPES
         if args.likes and "like.read" not in SCOPES:
             SCOPES = SCOPES + " like.read"
-        cmd_auth(store, cfg, client, args.paste)
+        cmd_auth(store, cfg, client, args.paste, force=args.force)
+        return
+    if args.command == "signin-check":
+        cmd_signin_check(client)
         return
     try:
         if args.command == "full":

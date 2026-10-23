@@ -1,17 +1,17 @@
 #!/bin/sh
 # Download the pinned Foreman release, check it and unzip it.
-# Usage: sh fetch_release.sh [tag]                  whole package (default tag v1.0.0, never main)
+# Usage: sh fetch_release.sh [tag]                  whole package (default tag v1.0.1, never main)
 #        sh fetch_release.sh [tag] --bot <slug>     individual template: only that bot's files
 # Slugs: follow-audit follow-finder shoutout-picker reply-queue fan-finder rerun-picker analytics-log
 set -eu
-TAG="${1:-v1.0.0}"
+TAG="${1:-v1.0.1}"
 SLUG=""
 if [ "${2:-}" = "--bot" ]; then
   SLUG="${3:-}"
   [ -n "$SLUG" ] || { echo "Give a bot slug after --bot, for example: --bot reply-queue" >&2; exit 1; }
 fi
 DEST_PARENT="${FOREMAN_DEST:-/workspace}"
-case "$TAG" in main|master|"") echo "Use a pinned release tag like v1.0.0, never a branch." >&2; exit 1 ;; esac
+case "$TAG" in main|master|"") echo "Use a pinned release tag like v1.0.1, never a branch." >&2; exit 1 ;; esac
 if [ -e "$DEST_PARENT/foreman/.template-master" ]; then
   echo "STOP. This is the template master copy. Setup never runs here." >&2; exit 1
 fi

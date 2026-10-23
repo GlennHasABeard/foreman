@@ -20,7 +20,7 @@ Pick one: either Foreman for the crew, or one or more individual templates. They
 | Dispatch (Foreman crew only) | Your front desk. Runs or explains any bot, keeps the shared spend ledger, posts a daily spend line. | $0 |
 | Follow Audit | Tracks followers and following. Lists inactive, dormant and gone accounts and who unfollowed. Never unfollows. | About $0.13 a day, plus about $0.65 to $1.00 per 1,000 accounts for a full scan |
 | Follow Finder | Finds creators in your niche and size range worth following. Has a Never show button. | About $0.45 a run, about $13.50 a month daily |
-| Shoutout Picker | Weekly list of mutuals and supporters worth a shoutout. Needs Follow Audit. | About $0.21 a week |
+| Shoutout Picker | Weekly list of mutuals and supporters worth a shoutout. Uses Follow Audit if installed, or runs its own follower scan. | About $0.21 a week |
 | Reply Queue | Sorts replies and mentions worth answering. | About $0.25 to $1.07 a run |
 | Fan Finder | Finds people who engage with you but do not follow yet. | $0 when it reuses Reply Queue's pull |
 | Rerun Picker | Suggests older posts worth posting again, with fresh angles. | About $0.02 a week, plus about $0.001 per post one time |
@@ -38,7 +38,7 @@ The X API is pay per use. Every bot and the spend ledger use one price table, `f
 
 Check the table against the X developer console after the first days. If X bills a kind of read at a different rate, change it in that one file. The numbers above come from one real account's first week. Billed amounts came in at about 65 to 100 percent of the scripts' own estimates. With every bot on its normal schedule, expect roughly $30 to $80 a month. A light setup (Dispatch, Follow Audit light checks, Rerun Picker, Analytics Log) is a few dollars a month.
 
-You set a daily spend cap. All bots share it. Any request that could push the day past the cap is stopped before it is sent. Check the X developer console for what you were actually billed.
+You set a daily spend cap. In a Foreman crew, all bots share one cap. An individual template has its own cap and ledger. Any request that could push the day past the cap is stopped before it is sent. Check the X developer console for what you were actually billed.
 
 Hosting on Cloudflare is free. A domain is optional and costs about $12 a year.
 
@@ -57,7 +57,7 @@ Do this once before installing. Only you can do it, in your own X developer acco
 9. Save. X shows an OAuth 2.0 Client ID and Client Secret. Keep that page open. Do not paste them in chat.
 10. Ignore the API Key, API Secret and Bearer Token on the Keys and tokens page. The bots do not use them.
 
-Where the secrets go. When Foreman asks, it sends you a stored secret request. Put the values there, never in chat:
+Where the secrets go. When Foreman, or the first individual template you set up, asks, it sends you a stored secret request. Put the values there, never in chat:
 
 | Stored secret name | Value from the X console |
 |---|---|
@@ -89,7 +89,7 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 ## Install the Foreman template (whole crew)
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.0.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.0.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.0.0` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.0.1` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.0.1, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.0.1` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -116,14 +116,13 @@ Lists can live on a private Cloudflare Pages site behind Cloudflare Access, with
 
 ## Individual bot templates
 
-Each of the seven bots is also its own template. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+Each of the seven bots is also its own template. Give a fresh Grok Bot the bot's template description. It waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.1 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
 
 How an individual template handles money and sign-in:
 
 - It has its own daily spend cap and its own ledger in its own folder. The one-day raise works with `bot_spend.py raise`. It ends at midnight in your timezone by itself.
-- It does its own X sign-in and saves it in its own folder, renewed under a lock.
-- A second sign-in to the same X app cancels the first. If you set up more than one individual template, give each one its own X app so they do not knock each other out.
-- Install an individual template under its own `BOTS_HOME`, not inside a Foreman crew's folder.
+- All individual templates on the same Grok Bot share one X sign-in (`/workspace/x-signin/x_signin.json`, owner-only, renewed under a lock). The first one you set up does the sign-in. Later ones find it, check it with one account read ($0.010, booked to their own ledger) and reuse it. If a Foreman crew is here, they use the crew's sign-in but keep their own ledger and cap.
+- One X app covers every bot on this Grok Bot. Setting up on a second Grok Bot or another computer with the same app logs the first one out.
 - You see the cost before anything paid runs.
 
 | Bot | Files (inside foreman/) | Secrets | X scopes | Browser | Works with |

@@ -34,14 +34,21 @@ def bot_config(name):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", nargs="?", default="show", choices=["show", "raise", "clear", "mode"])
+    ap.add_argument("cmd", nargs="?", default="show", choices=["show", "raise", "clear", "mode", "individual"])
     ap.add_argument("amount", nargs="?", type=float)
     ap.add_argument("--yes", action="store_true")
     a = ap.parse_args(argv)
     name = fw.crew_bot()
+    if a.cmd == "individual":
+        m = fw.individual_marker(name)
+        os.makedirs(os.path.dirname(m), exist_ok=True)
+        open(m, "w").close()
+        print(f"{name}: set up from its individual template. Own ledger and cap; shared sign-in.")
     mode = fw.crew_mode()
-    if a.cmd == "mode":
-        print(f"{name}: {mode}. Ledger {fw.ledger_path()}. Sign-in {fw.signin_path()}.")
+    if a.cmd in ("mode", "individual"):
+        kind, sp = fw.signin_source()
+        print(f"{name}: {mode}{' (individual template)' if fw.is_individual() else ''}. Ledger {fw.ledger_path()}. "
+              f"Sign-in: {kind} at {sp}" + (" (none yet, run auth once)" if kind == "none" else "") + ".")
         return 0
     if mode == "shared":
         print("Dispatch or Foreman is installed, so this bot uses the shared ledger and cap. "

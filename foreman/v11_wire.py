@@ -25,9 +25,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import v11  # noqa: E402
 
 SLUG = lambda n: n.lower().replace(" ", "-")  # noqa: E731
-PAGES = {"Follow Audit": "headcount.html", "Follow Finder": "scout.html", "Shoutout Picker": "shoutouts.html",
-         "Reply Queue": "radar.html", "Fan Finder": "leads.html", "Rerun Picker": "reruns.html",
-         "Analytics Log": "analytics.html"}
+PAGES = {"Follow Audit": "follow-audit.html", "Follow Finder": "follow-finder.html", "Shoutout Picker": "shoutout-picker.html",
+         "Reply Queue": "reply-queue.html", "Fan Finder": "fan-finder.html", "Rerun Picker": "rerun-picker.html",
+         "Analytics Log": "analytics-log.html"}
 
 
 def root(name):
@@ -226,7 +226,7 @@ def panel_analytics_log(name):
         if fp:
             lines.append("Most follows from a post: " + ", ".join(f"{p} ({int(n)})" for n, p in fp))
     cfg = _cfg(name)
-    if v11.show_500k_chart(cfg.get("monetized")):
+    if v11.show_500k_chart(cfg.get("has_monetization", cfg.get("monetized"))):
         lines.append("500K verified impressions chart: on")
     return lines or ["No posts pulled yet"], {}
 

@@ -20,9 +20,13 @@ from urllib.parse import quote
 
 E = html.escape
 SLUG = lambda n: n.lower().replace(" ", "-")  # noqa: E731
-FILES = {"Reply Queue": "radar.html", "Fan Finder": "leads.html", "Follow Finder": "scout.html",
-         "Shoutout Picker": "shoutouts.html", "Rerun Picker": "reruns.html", "Follow Audit": "headcount.html",
-         "Analytics Log": "analytics.html"}
+FILES = {"Reply Queue": "reply-queue.html", "Fan Finder": "fan-finder.html", "Follow Finder": "follow-finder.html",
+         "Shoutout Picker": "shoutout-picker.html", "Rerun Picker": "rerun-picker.html", "Follow Audit": "follow-audit.html",
+         "Analytics Log": "analytics-log.html"}
+# Page names before v1.1. The site keeps a small redirect page under each old name.
+OLD_FILES = {"Reply Queue": "radar.html", "Fan Finder": "leads.html", "Follow Finder": "scout.html",
+             "Shoutout Picker": "shoutouts.html", "Rerun Picker": "reruns.html", "Follow Audit": "headcount.html",
+             "Analytics Log": "analytics.html"}
 
 CSS = """
 :root{color-scheme:light;--bg:#ffffff;--card:#ffffff;--soft:#f3f4f6;--ink:#111111;--mute:#5b5f66;--line:#d9dbe0;
@@ -33,9 +37,9 @@ CSS = """
 --ink:#f1f1f1;--mute:#a3a7ad;--line:#353535;--acc:#f1f1f1;--on-acc:#121212;--coral:#ff7a6b;--warn:#ffcf70;--warnbg:#2b2410}}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);
 font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-a{color:inherit}.wrap{max-width:860px;margin:0 auto;padding:0 14px 60px}
+a{color:inherit}.wrap{max-width:1400px;margin:0 auto;padding:0 14px 60px}
 header.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
-nav.bar{display:flex;gap:4px;overflow-x:auto;max-width:860px;margin:0 auto;padding:8px 14px;scrollbar-width:none}
+nav.bar{display:flex;gap:4px;overflow-x:auto;max-width:1400px;margin:0 auto;padding:8px 14px;scrollbar-width:none}
 nav.bar a{white-space:nowrap;text-decoration:none;padding:6px 10px;border-radius:8px;font-size:13px;color:var(--mute)}
 nav.bar a.on{background:var(--soft);color:var(--ink);font-weight:600}
 h1{font-size:24px;margin:14px 0 2px}h2{font-size:17px;margin:22px 0 8px}
@@ -80,6 +84,18 @@ z-index:30;transform:translateX(105%);transition:transform .2s;overflow:auto;pad
 .bar7{display:flex;gap:4px;align-items:flex-end;height:60px}.bar7 i{flex:1;background:var(--acc);border-radius:3px 3px 0 0;min-height:2px}
 .demo{position:fixed;right:10px;bottom:10px;font-size:11px;padding:3px 8px;border-radius:6px;background:var(--soft);
 border:1px solid var(--line);color:var(--mute);z-index:4}
+.strip{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}.tbl th,.tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);
+vertical-align:top;overflow-wrap:anywhere}.tbl th{font-size:12px;color:var(--mute);font-weight:600}.tbl td.n,.tbl th.n{text-align:right;white-space:nowrap}
+.prog{height:12px;border-radius:999px;background:var(--soft);border:1px solid var(--line);overflow:hidden;margin:6px 0}
+.prog i{display:block;height:100%;background:var(--acc)}
+.chart{display:flex;gap:2px;align-items:flex-end;height:120px;border-bottom:1px solid var(--line);margin-top:6px}
+.chart i{flex:1;background:var(--acc);border-radius:2px 2px 0 0;min-height:1px;opacity:.85}
+.cols{display:grid;gap:12px;grid-template-columns:1fr}.cols>*{min-width:0}
+.wk .card h2{margin:0 0 6px}.wk ul.plain li{overflow-wrap:anywhere}
+@media(min-width:760px){div[id$="-list"],.cols,.wk,#panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+div[id$="-list"]>.card,.wk>.card,#panels>.card{margin:0}#panels .panel.off{display:none}.customizing #panels .panel.off{display:block!important}}
+@media(min-width:1200px){#panels,.wk{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:560px){h1{font-size:21px}.btns .btn,.btns button{flex:1;justify-content:center}}
 """
 
@@ -88,7 +104,7 @@ JS = r"""
 (function(){
 var q=new URLSearchParams(location.search),r=document.documentElement;
 var th=q.get("theme")||localStorage.getItem("v11-theme");if(th==="light"||th==="dark")r.setAttribute("data-theme",th);
-window.V11={};var V=window.V11;V.page=document.body.getAttribute("data-marks");V.hosted=location.protocol!=="file:"&&!q.has("local");
+window.V11={};var V=window.V11;V.page=document.body.getAttribute("data-marks");V.hosted=document.body.getAttribute("data-hosted")==="1"&&!q.has("local");V.preview=location.protocol==="file:";
 V.m={never:{},done:{},stages:{},notes:{},follow_ups:{}};
 function newer(a,b){return !b||(a&&a.ts>b.ts)}
 V.merge=function(dst,src){if(!src)return dst;["never","done","stages","follow_ups"].forEach(function(k){var s=src[k]||{};dst[k]=dst[k]||{};
@@ -99,7 +115,7 @@ try{V.merge(V.m,JSON.parse(document.getElementById("v11-marks").textContent))}ca
 var LK="v11-marks-"+V.page;try{V.merge(V.m,JSON.parse(localStorage.getItem(LK)||"null"))}catch(e){}
 V.api="/api/checks?page=marks-"+encodeURIComponent(V.page);
 V.save=function(){try{localStorage.setItem(LK,JSON.stringify(V.m))}catch(e){}
- if(!V.hosted)return;fetch(V.api,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(V.m)})
+ if(!V.hosted||V.preview)return;fetch(V.api,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(V.m)})
  .then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(s){if(s&&typeof s==="object"&&s.never){V.merge(V.m,s);try{localStorage.setItem(LK,JSON.stringify(V.m))}catch(e){}V.render()}}).catch(function(){V.offline()})};
 V.set=function(kind,h,val){h=h.replace(/^@/,"").toLowerCase();var e={ts:new Date().toISOString()};for(var k in val)e[k]=val[k];
  V.m[kind][h]=e;V.save();V.render()};
@@ -115,9 +131,9 @@ V.toast=function(msg,undo){t.textContent=msg+" ";if(undo){var b=document.createE
 document.addEventListener("DOMContentLoaded",function(){var tb=document.getElementById("v11-theme");if(tb)tb.onclick=function(){var d=r.getAttribute("data-theme")==="dark"||
  (!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme: dark)").matches);var n=d?"light":"dark";
  r.setAttribute("data-theme",n);try{localStorage.setItem("v11-theme",n)}catch(e){}}});
-if(V.hosted)fetch(V.api,{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()})
+if(V.hosted&&!V.preview)fetch(V.api,{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()})
  .then(function(s){if(s&&typeof s==="object"){V.merge(V.m,s);try{localStorage.setItem(LK,JSON.stringify(V.m))}catch(e){}V.render()}})
- .catch(function(){V.offline()});else document.addEventListener("DOMContentLoaded",V.offline);
+ .catch(function(){V.offline()});else if(!V.hosted)document.addEventListener("DOMContentLoaded",V.offline);
 document.addEventListener("DOMContentLoaded",function(){V.render()});
 })();
 """
@@ -171,12 +187,12 @@ def nav(items, here):
     return f'<header class="top"><nav class="bar">{links}</nav></header>'
 
 
-def shell(title, slug, updated_html, status, body, marks, navitems, demo=False, offline_hint=""):
+def shell(title, slug, updated_html, status, body, marks, navitems, demo=False, offline_hint="", hosted=True):
     off = (f'<p id="v11-offline" class="note hide">Not hosted, or the sync is unreachable: marks stay in this browser. '
            f'{E(offline_hint)}</p>') if offline_hint else '<p id="v11-offline" class="hide"></p>'
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{E(title)}</title>'
-            f'<style>{CSS}</style></head><body data-marks="{E(slug)}">'
+            f'<style>{CSS}</style></head><body data-marks="{E(slug)}" data-hosted="{1 if hosted else 0}">'
             f'<script type="application/json" id="v11-marks">{_j(marks)}</script><script>{JS}</script>'
             f'{nav(navitems, title)}<div class="wrap">'
             f'<h1>{E(title)}</h1><div class="meta">{updated_html}<button type="button" id="v11-theme" '
@@ -474,8 +490,8 @@ function apply(){var ps=[].slice.call(grid.querySelectorAll(".panel"));var ord=l
  ps.sort(function(a,b){var x=ord.indexOf(a.id),y=ord.indexOf(b.id);return (x<0?99:x)-(y<0?99:y)});ps.forEach(function(p){grid.appendChild(p);
  p.classList.toggle("off",(lay.off||[]).indexOf(p.id)>=0)})}
 function save(){lay.order=[].map.call(grid.querySelectorAll(".panel"),function(p){return p.id});try{localStorage.setItem(LK,JSON.stringify(lay))}catch(e){}
- if(V.hosted)fetch("/api/checks?page=layout-home",{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(lay)}).catch(function(){})}
-if(V.hosted)fetch("/api/checks?page=layout-home",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(s){if(s&&s.order){lay=s;apply()}}).catch(function(){});
+ if(V.hosted&&!V.preview)fetch("/api/checks?page=layout-home",{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(lay)}).catch(function(){})}
+if(V.hosted&&!V.preview)fetch("/api/checks?page=layout-home",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(s){if(s&&s.order){lay=s;apply()}}).catch(function(){});
 apply();
 document.getElementById("cust").onclick=function(){var on=document.body.classList.toggle("customizing");this.classList.toggle("on",on);this.textContent=on?"Done customizing":"Customize"};
 grid.addEventListener("click",function(e){var b=e.target.closest("[data-mv]");if(!b)return;var p=b.closest(".panel"),k=b.getAttribute("data-mv");
@@ -532,3 +548,128 @@ def home(panels, people, top_fans, strip):
 
 def lines_html(lines):
     return "<ul class='plain'>" + "".join(f"<li>{E(str(x))}</li>" for x in lines) + "</ul>"
+
+
+# ---------------------------------------------------------------- Analytics Log
+
+def _n(x):
+    try:
+        return float(str(x).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _fmt(x):
+    return f"{x:,.0f}"
+
+
+def tiles_html(pairs, cls="tiles"):
+    return f'<div class="{cls}">' + "".join(f'<div class="tile"><b>{E(str(v))}</b><span>{E(k)}</span></div>'
+                                           for k, v in pairs) + "</div>"
+
+
+def analytics_log(posts, followers, verified, monetized, sv=None, goal=500000, days=90):
+    """posts: rows of posts_latest.csv. followers: rows of followers.csv (oldest first).
+    verified: rows of verified_daily_latest.csv. The 500K chart shows only when monetized."""
+    from datetime import datetime as _dt
+    ps = []
+    for r in posts:
+        try:
+            ts = _dt.fromisoformat((r.get("posted_at_et") or "").strip())
+        except ValueError:
+            continue
+        ps.append({"ts": ts, "imp": _n(r.get("impressions")), "fol": _n(r.get("new_follows") or r.get("follows")),
+                   "text": (r.get("text") or "").strip(), "link": r.get("link") or "", "id": r.get("post_id", "")})
+    last = followers[-1] if followers else {}
+    tiles = [("followers", _fmt(_n(last.get("followers_total")))) if last.get("followers_total") else None,
+             ("posts tracked", len(ps)),
+             ("impressions on those posts", _fmt(sum(p["imp"] for p in ps))),
+             ("followers gained from posts", _fmt(sum(p["fol"] for p in ps)))]
+    if last.get("new_follows_today"):
+        tiles.append(("new follows today", _fmt(_n(last["new_follows_today"]))))
+    out = tiles_html([t for t in tiles if t])
+    # best time to post: day of week x hour, by average impressions
+    by = {}
+    for p in ps:
+        k = (p["ts"].strftime("%a"), p["ts"].hour)
+        by.setdefault(k, []).append(p)
+    best = sorted(by.items(), key=lambda kv: -sum(x["imp"] for x in kv[1]) / len(kv[1]))[:6]
+    rows = "".join(f'<tr><td>{E(d)} {(h % 12) or 12} {"AM" if h < 12 else "PM"}</td><td class="n">{len(v)}</td>'
+                   f'<td class="n">{_fmt(sum(x["imp"] for x in v) / len(v))}</td>'
+                   f'<td class="n">{sum(x["fol"] for x in v) / len(v):.1f}</td></tr>' for (d, h), v in best)
+    bt = ('<div class="card"><h2 style="margin-top:0">Best time to post</h2>' + (
+        '<table class="tbl"><tr><th>When (your time)</th><th class="n">Posts</th><th class="n">Avg impressions</th>'
+        f'<th class="n">Avg follows</th></tr>{rows}</table>' if rows else '<p class="note">No posts pulled yet.</p>')
+        + '<p class="note">From the posts Analytics Log has pulled. More posts make this steadier.</p></div>')
+    top = sorted(ps, key=lambda p: (-p["fol"], -p["imp"]))[:10]
+    rows = "".join(f'<tr><td>{(f"<a href=\"{E(p["link"])}\" target=\"_blank\" rel=\"noopener\">" if p["link"] else "")}'
+                   f'{E(p["text"][:90] or p["id"])}{"</a>" if p["link"] else ""}<div class="nm">{E(p["ts"].strftime("%b %d"))}</div></td>'
+                   f'<td class="n">{_fmt(p["fol"])}</td><td class="n">{_fmt(p["imp"])}</td></tr>' for p in top)
+    fp = ('<div class="card"><h2 style="margin-top:0">Followers gained per post</h2>' + (
+        f'<table class="tbl"><tr><th>Post</th><th class="n">Follows</th><th class="n">Impressions</th></tr>{rows}</table>'
+        if rows else '<p class="note">No posts pulled yet.</p>') + '</div>')
+    out += f'<div class="cols">{bt}{fp}</div>'
+    if monetized:
+        vs = [(r.get("date", ""), _n(r.get("impressions"))) for r in verified if r.get("date")][-days:]
+        total = sum(v for _, v in vs)
+        pct = min(100.0, 100.0 * total / goal) if goal else 0
+        mx = max([v for _, v in vs] or [1]) or 1
+        bars = "".join(f'<i style="height:{max(1, round(100 * v / mx))}%" title="{E(d)}: {_fmt(v)}"></i>' for d, v in vs)
+        out += ('<div class="card"><h2 style="margin-top:0">500K verified impressions</h2>'
+                f'<p>{_fmt(total)} of {_fmt(goal)} in the last {len(vs)} days ({pct:.0f}%).</p>'
+                f'<div class="prog"><i style="width:{pct:.1f}%"></i></div>'
+                + (f'<div class="chart" aria-label="Verified impressions per day">{bars}</div>'
+                   f'<p class="note">Each bar is one day, {E(vs[0][0])} to {E(vs[-1][0])}.</p>' if vs else
+                   '<p class="note">No verified impressions pulled yet.</p>') + '</div>')
+    return out
+
+
+# ---------------------------------------------------------------- Your week
+
+_NUM = re.compile(r"^(?:(?P<lab>[A-Za-z][A-Za-z0-9 ()]+):\s*(?P<v1>[\d,.$]+(?:\s*(?:min|h))?)|(?:[A-Za-z]+ )?(?P<v2>\d[\d,]*)\s+(?P<lab2>[a-z][a-z ]{2,30}))")
+
+
+def line_tiles(lines):
+    """Pull 'Label: 12' and '12 things' pairs out of a bot's report lines. Returns (tiles, rest)."""
+    tiles, rest = [], []
+    for ln in lines:
+        ln = str(ln)
+        if ln.startswith("Today: about $"):
+            tiles.append(("spend today (estimate)", ln.split("about ", 1)[1].split(" ")[0]))
+            continue
+        full = True
+        for part in re.split(r"[;,] ", ln):
+            part = part.strip()
+            m = _NUM.match(part)
+            if m and m.group("lab2") and (m.end() != len(part) or "(" in part or ")" in part):
+                m = None
+            if m and len(tiles) < 8:
+                lab = (m.group("lab") or m.group("lab2") or "").strip()
+                val = m.group("v1") or m.group("v2")
+                if lab and val and not lab.lower().startswith(("best", "most")):
+                    tiles.append((lab.lower().split(" (")[0].split(" over ")[0][:28].rstrip(), val))
+                    full = full and m.end() == len(part)
+                    continue
+            full = False
+        if not full:
+            rest.append(ln)
+    return tiles, rest
+
+
+def week(sections):
+    """sections: [(bot, href, status, tiles [(label, value)], lines)]. One card per installed bot."""
+    if not sections:
+        return '<p class="note">No bot has run yet this week.</p>'
+    cards = []
+    for bot, href, status, tiles, lines in sections:
+        t = f'<a href="{E(href)}">{E(bot)}</a>' if href else E(bot)
+        cards.append(f'<div class="card"><h2>{t}</h2><p class="note" style="margin:0 0 4px">{E(status)}</p>'
+                     + (tiles_html(tiles) if tiles else "") + (lines_html(lines) if lines else "") + "</div>")
+    return '<div class="wk">' + "".join(cards) + "</div>"
+
+
+def redirect(to):
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Moved</title>'
+            f'<meta http-equiv="refresh" content="0;url={E(to)}"><link rel="canonical" href="{E(to)}">'
+            f'<script>location.replace({_j(to)}+location.search+location.hash)</script></head>'
+            f'<body><p>This page moved to <a href="{E(to)}">{E(to)}</a>.</p></body></html>')

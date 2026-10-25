@@ -41,12 +41,12 @@ HEADCOUNT_PAGE = os.path.join(FW_DIR, "reports", "headcount.html")
 
 PAGES = [
     # (published name, source file, title, when it updates)
-    ("radar.html", BOTS_HOME + "/engagement/reports/mention_radar.html", "Reply Queue", "Runs on its schedule"),
-    ("leads.html", BOTS_HOME + "/engagement/reports/warm_leads.html", "Fan Finder", "Runs on its schedule"),
-    ("scout.html", BOTS_HOME + "/creator-scout/reports/creator_scout.html", "Follow Finder", "Runs on its schedule"),
-    ("shoutouts.html", BOTS_HOME + "/shoutouts/weeks/shoutout_list.html", "Shoutout Picker", "Weekly"),
-    ("reruns.html", BOTS_HOME + "/reruns/picks/reruns.html", "Rerun Picker", "Weekly"),
-    ("headcount.html", HEADCOUNT_PAGE, "Follow Audit", "After each full scan"),
+    ("reply-queue.html", BOTS_HOME + "/engagement/reports/mention_radar.html", "Reply Queue", "Runs on its schedule"),
+    ("fan-finder.html", BOTS_HOME + "/engagement/reports/warm_leads.html", "Fan Finder", "Runs on its schedule"),
+    ("follow-finder.html", BOTS_HOME + "/creator-scout/reports/creator_scout.html", "Follow Finder", "Runs on its schedule"),
+    ("shoutout-picker.html", BOTS_HOME + "/shoutouts/weeks/shoutout_list.html", "Shoutout Picker", "Weekly"),
+    ("rerun-picker.html", BOTS_HOME + "/reruns/picks/reruns.html", "Rerun Picker", "Weekly"),
+    ("follow-audit.html", HEADCOUNT_PAGE, "Follow Audit", "After each full scan"),
 ]
 
 WORKER = """export default {
@@ -517,7 +517,7 @@ def copy_page(src, dst):
         add += SYNC_SCRIPT
     if "data-lists-nav" not in page:
         add += nav_script()
-    if os.path.basename(dst) == "scout.html" and "data-lists-never" not in page:
+    if os.path.basename(dst) == "follow-finder.html" and "data-lists-never" not in page:
         add += NEVER_SCRIPT
     if "data-lists-theme" not in page:
         add += THEME_JS
@@ -553,19 +553,18 @@ def v11_wire():
 
 def v11_pages(w, title_to_name):
     """Refresh each copied page's v1.1 panel from the bot's saved report, and write the
-    pages Follow Audit and Analytics Log need (analytics.html, week.html)."""
+    fallback analytics-log.html and week.html (v11_render rewrites both)."""
     for name, dst in title_to_name:
         s = w.saved(name)
         if s and os.path.exists(dst):
             w.inject(dst, w._html_block(name, s["lines"] + [s["spend"]], s.get("extra") or {}, s["status"]))
-    s = w.saved("Analytics Log")
-    if s and "Analytics Log" in w.v11.installed():
-        body = "<ul>" + "".join(f"<li>{html.escape(x)}</li>" for x in s["lines"] + [s["spend"]]) + "</ul>"
-        with open(os.path.join(SITE_DIR, "analytics.html"), "w", encoding="utf-8") as f:
-            f.write(w.v11.page("Analytics Log", body, w._ts(s["at"]), s["status"]) + nav_script())
+    # analytics-log.html and week.html are written by v11_render with the v1.1 shell.
     week = w.week_text()
     with open(os.path.join(SITE_DIR, "week.html"), "w", encoding="utf-8") as f:
         f.write(w.v11.page("Your week", "<pre>" + html.escape(week) + "</pre>", w.v11.now()) + nav_script())
+    if "Analytics Log" in w.v11.installed():
+        with open(os.path.join(SITE_DIR, "analytics-log.html"), "w", encoding="utf-8") as f:
+            f.write(w.v11.page("Analytics Log", "<p>Building.</p>", w.v11.now()) + nav_script())
 
 
 def v11_render(w):
@@ -580,18 +579,20 @@ def v11_render(w):
     demo = os.environ.get("LISTS_DEMO") == "1"
     navitems = ([("Home", "index.html")] if mode in ("home", "crew") else [])
     navitems += [(t, n) for n, _, t, _ in PAGES if t in inst and os.path.exists(os.path.join(SITE_DIR, n))]
-    if os.path.exists(os.path.join(SITE_DIR, "analytics.html")):
-        navitems.append(("Analytics Log", "analytics.html"))
+    if "Analytics Log" in inst:
+        navitems.append(("Analytics Log", "analytics-log.html"))
+    navitems.append(("Your week", "week.html"))
     hints = {"Reply Queue": 'Say "mark @name done" in chat.', "Fan Finder": 'Say "never show @name" or "@name is engaged" in chat.',
              "Follow Finder": 'Say "never show @name" or "show @name again" in chat.',
              "Shoutout Picker": 'Say "mark @name done" or "mark @name pending" in chat.',
              "Rerun Picker": "", "Follow Audit": ""}
+    hosted = os.path.exists(os.path.join(BOTS_HOME, "site", "site.env"))
     people, built = {}, []
     for fname, src, title, _ in PAGES:
         dst = os.path.join(SITE_DIR, fname)
         if title not in inst or not os.path.exists(dst):
             continue
-        data = P.extract(dst, "D" if fname == "headcount.html" else "DATA")
+        data = P.extract(dst, "D" if fname == "follow-audit.html" else "DATA")
         if data is None:
             continue
         full = fname.replace(".html", "-full.html")
@@ -619,7 +620,7 @@ def v11_render(w):
         body += f'<p class="note"><a href="{full}">Full report</a></p>'
         with open(dst, "w", encoding="utf-8") as f:
             f.write(P.shell(title, P.SLUG(title), v.last_updated(at), status, body, P.store_to_marks(store),
-                            navitems, demo, hints.get(title, "")))
+                            navitems, demo, hints.get(title, ""), hosted))
         built.append(fname)
         rows = data if isinstance(data, list) else (data.get("since") or [])
         for r in rows:
@@ -637,7 +638,7 @@ def v11_render(w):
             if n == "Top fans":
                 continue
             sv = w.saved(n)
-            href = next((f for f, _, t, _ in PAGES if t == n), "analytics.html" if n == "Analytics Log" else "")
+            href = next((f for f, _, t, _ in PAGES if t == n), "analytics-log.html" if n == "Analytics Log" else "")
             lines = (sv["lines"][:4] + [sv["spend"]]) if sv else ["No run yet"]
             if n == "Bot health":
                 lines = w.health()
@@ -655,13 +656,77 @@ def v11_render(w):
             for k in marks:
                 marks[k].update(m[k])
         due = sum(1 for f in marks["follow_ups"].values() if f.get("on") and (f.get("due") or "") <= datetime.now().strftime("%Y-%m-%d"))
-        strip = [("bots hosted", len(inst)), ("follow-ups due", due)]
+        strip = [("follow-ups due", due)]
+        for n in inst:
+            t, _ = P.line_tiles(((w.saved(n) or {}).get("lines") or [])[:2])
+            if t and len(strip) < 5:
+                strip.append(t[0])
+        strip.append(("bots hosted", len(inst)))
         ok = [n for n in inst if (w.saved(n) or {}).get("status", "").startswith("Ran OK")]
         status = f"{len(ok)} of {len(inst)} bots ran OK on their last run."
         with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
             f.write(P.shell("Home", "home", v.last_updated(v.now()), status, P.home(panels, people, top, strip),
-                            marks, navitems, demo, 'Say "follow up @name on YYYY-MM-DD" in chat.'))
+                            marks, navitems, demo, 'Say "follow up @name on YYYY-MM-DD" in chat.', hosted))
         built.append("index.html")
+    built += v11_extra_pages(w, P, navitems, demo, hosted)
+    return built
+
+
+def _csv_rows(path):
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+    except OSError:
+        return []
+
+
+def v11_extra_pages(w, P, navitems, demo, hosted):
+    """analytics-log.html and week.html in the v1.1 shell, plus redirects from the old page names."""
+    v, built = w.v11, []
+    inst = v.installed()
+    empty = {"never": {}, "done": {}, "stages": {}, "notes": {}, "follow_ups": {}}
+    if "Analytics Log" in inst:
+        sv = w.saved("Analytics Log")
+        d = os.path.join(w.root("Analytics Log"), "data")
+        cfg = w._cfg("Analytics Log")
+        body = P.analytics_log(_csv_rows(os.path.join(d, "posts_latest.csv")), _csv_rows(os.path.join(d, "followers.csv")),
+                               _csv_rows(os.path.join(d, "verified_daily_latest.csv")),
+                               v.show_500k_chart(cfg.get("has_monetization", cfg.get("monetized"))), sv)
+        if sv:
+            body += "<h2>This run</h2>" + P.lines_html(sv["lines"] + [sv["spend"]])
+        at = w._ts(sv["at"]) if sv else v.now()
+        with open(os.path.join(SITE_DIR, "analytics-log.html"), "w", encoding="utf-8") as f:
+            f.write(P.shell("Analytics Log", "analytics-log", v.last_updated(at), (sv or {}).get("status") or "No run yet",
+                            body, empty, navitems, demo, "", hosted))
+        built.append("analytics-log.html")
+    secs = []
+    for fname, _, title, _ in PAGES + [("analytics-log.html", "", "Analytics Log", "")]:
+        if title not in inst:
+            continue
+        sv = w.saved(title)
+        if not sv:
+            secs.append((title, fname, "No run yet", [], []))
+            continue
+        tiles, rest = P.line_tiles(sv["lines"] + [sv["spend"]])
+        for k, val in ((sv.get("extra") or {}).get("tiles") or {}).items():
+            if all(k != t[0] for t in tiles):
+                tiles.append((k, val))
+        secs.append((title, fname, f'{sv.get("status") or "Ran OK"}, {w._ts(sv["at"]).astimezone().strftime("%a %b %d, %I:%M %p")}', tiles, rest))
+    if v.is_crew():
+        secs.append(("Dispatch", "", "Bot health", [], w.health()))
+    with open(os.path.join(SITE_DIR, "week.html"), "w", encoding="utf-8") as f:
+        f.write(P.shell("Your week", "week", v.last_updated(v.now()), f"{len(inst)} bots installed.", P.week(secs),
+                        empty, navitems, demo, "", hosted))
+    built.append("week.html")
+    for title, old in P.OLD_FILES.items():
+        new = P.FILES[title]
+        if os.path.exists(os.path.join(SITE_DIR, new)):
+            with open(os.path.join(SITE_DIR, old), "w", encoding="utf-8") as f:
+                f.write(P.redirect(new))
+            full = old.replace(".html", "-full.html")
+            if os.path.exists(os.path.join(SITE_DIR, new.replace(".html", "-full.html"))):
+                with open(os.path.join(SITE_DIR, full), "w", encoding="utf-8") as f:
+                    f.write(P.redirect(new.replace(".html", "-full.html")))
     return built
 
 
@@ -708,8 +773,8 @@ def main():
             panels = w.home_html(cards)
             if panels:
                 cards = [panels] + cards
-            if os.path.exists(os.path.join(SITE_DIR, "analytics.html")):
-                cards.append('<a class="card" href="analytics.html"><div><div class="t">Analytics Log</div></div></a>')
+            if os.path.exists(os.path.join(SITE_DIR, "analytics-log.html")):
+                cards.append('<a class="card" href="analytics-log.html"><div><div class="t">Analytics Log</div></div></a>')
             cards.append('<a class="card" href="week.html"><div><div class="t">Your week</div></div></a>')
         except Exception as e:  # never let v1.1 extras block the lists
             print(f"v1.1 extras skipped: {e}", file=sys.stderr)

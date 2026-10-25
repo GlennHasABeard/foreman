@@ -57,7 +57,6 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - Sponsor flag from the owner's own sponsor list (`sponsor_terms`, empty by default). With an empty list nothing is flagged.
 - Angles fold into each pick. Chat gets the link and a pick count when hosted.
 - New video picks are reviewed before the build. Rejected picks are skipped that week.
-- Optional X archive backfill (offline, no API calls).
 - Chat commands work with or without hosting and save in this bot's own files (`data/chat_store-<slug>.json`). Hosted pages save the same marks in KV and both are merged, so nothing stops working without hosting. When the owner's message is one of these, run `CREW_BOT="Rerun Picker" python3 /workspace/foreman/foreman/v11.py chat "<message>"` and reply with what it prints:
   - `note @name ...` saves a note
   - `show me everything from @name` shows the per-person timeline and notes

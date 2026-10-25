@@ -52,7 +52,6 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - The 500K window chart shows only on monetized accounts.
 - Thinner night pull: audience, 1-year video and heatmap move to the weekly night pull.
 - Google Sheet rows are opt-in: only when the owner gives their own sheet ID (`sheet_id`). Otherwise rows go to a local CSV.
-- Optional X archive backfill (offline).
 - Your week on X: sections only for the bots installed (alone: impressions and followers).
 - Chat commands work with or without hosting and save in this bot's own files (`data/chat_store-<slug>.json`). Hosted pages save the same marks in KV and both are merged, so nothing stops working without hosting. When the owner's message is one of these, run `CREW_BOT="Analytics Log" python3 /workspace/foreman/foreman/v11.py chat "<message>"` and reply with what it prints:
   - `note @name ...` saves a note

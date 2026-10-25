@@ -25,7 +25,10 @@
         "follow-audit/x_prices.py",
         "follow-audit/bot_spend.py",
         "follow-audit/instructions.md",
-        "follow-audit/routine.json"
+        "follow-audit/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -60,7 +63,10 @@
         "follow-audit/bot_spend.py",
         "follow-finder/creator_scout.py",
         "follow-finder/instructions.md",
-        "follow-finder/routine.json"
+        "follow-finder/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -97,7 +103,10 @@
         "follow-audit/bot_spend.py",
         "shoutout-picker/shoutout_desk.py",
         "shoutout-picker/instructions.md",
-        "shoutout-picker/routine.json"
+        "shoutout-picker/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -134,7 +143,10 @@
         "follow-audit/bot_spend.py",
         "reply-queue/engagement.py",
         "reply-queue/instructions.md",
-        "reply-queue/routine.json"
+        "reply-queue/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -170,7 +182,10 @@
         "follow-audit/bot_spend.py",
         "reply-queue/engagement.py",
         "fan-finder/instructions.md",
-        "fan-finder/routine.json"
+        "fan-finder/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -208,7 +223,10 @@
         "follow-audit/bot_spend.py",
         "rerun-picker/rerun_picker.py",
         "rerun-picker/instructions.md",
-        "rerun-picker/routine.json"
+        "rerun-picker/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -240,7 +258,10 @@
         "guides/analytics-log.md",
         "analytics-log/x_analytics.py",
         "analytics-log/instructions.md",
-        "analytics-log/routine.json"
+        "analytics-log/routine.json",
+        "site/HOSTING.md",
+        "site/publish_lists.py",
+        "site/pages_v11.py"
       ],
       "secrets": [],
       "x_scopes": [],

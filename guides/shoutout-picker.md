@@ -38,6 +38,7 @@ Once a day, the first time it works that day, the bot checks GitHub (free, no X 
 
 ## New in v1.1
 `foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- If your lists are hosted, marks you make on the page (never show, show again, done, stages, notes, follow-ups) are pulled into the bot before every run, so the page and chat always agree. The newest mark wins, and two devices saving at once keep both. The previous full report stays linked at the bottom of each page.
 - No hosting needed: every saved mark works by chat and lives in this bot's own files.
   - `note @name ...` saves a note
   - `show me everything from @name` shows the per-person timeline and notes

@@ -26,6 +26,7 @@ Once a day, the first time it works that day, the bot checks GitHub (free, no X 
 
 ## New in v1.1
 `foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- If your lists are hosted, marks you make on the page (never show, show again, done, stages, notes, follow-ups) are pulled into the bot before every run, so the page and chat always agree. The newest mark wins, and two devices saving at once keep both. The previous full report stays linked at the bottom of each page.
 - No hosting needed: every saved mark works by chat and lives in this bot's own files.
   - `note @name ...` saves a note
   - `show me everything from @name` shows the per-person timeline and notes
@@ -38,5 +39,4 @@ What this bot got in v1.1:
 - The 500K window chart shows only on monetized accounts.
 - Thinner night pull: audience, 1-year video and heatmap move to the weekly night pull.
 - Google Sheet rows are opt-in: only when the owner gives their own sheet ID (`sheet_id`). Otherwise rows go to a local CSV.
-- Optional X archive backfill (offline).
 - Your week on X: sections only for the bots installed (alone: impressions and followers).

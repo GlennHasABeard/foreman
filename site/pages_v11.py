@@ -103,6 +103,9 @@ vertical-align:top;overflow-wrap:anywhere}.tbl th{font-size:12px;color:var(--mut
 @media(min-width:760px){div[id$="-list"],.cols,.wk,#panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
 div[id$="-list"]>.card,.wk>.card,#panels>.card{margin:0}#panels .panel.off{display:none}.customizing #panels .panel.off{display:block!important}}
 @media(min-width:1200px){#panels,.wk{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:760px){#panels{display:block;columns:2;column-gap:12px}#panels>.card{break-inside:avoid;display:inline-block;width:100%;margin:0 0 12px}
+#panels .panel.off{display:none}.customizing #panels .panel.off{display:inline-block!important}}
+@media(min-width:1200px){#panels{columns:3}}
 @media(max-width:560px){h1{font-size:21px}.btns .btn,.btns button{flex:1;justify-content:center}}
 """
 

@@ -28,6 +28,7 @@ import csv
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import date, datetime
@@ -587,7 +588,7 @@ def v11_render(w):
              "Shoutout Picker": 'Say "mark @name done" or "mark @name pending" in chat.',
              "Rerun Picker": "", "Follow Audit": ""}
     hosted = os.path.exists(os.path.join(BOTS_HOME, "site", "site.env"))
-    people, built = {}, []
+    people, built, datas = {}, [], {}
     for fname, src, title, _ in PAGES:
         dst = os.path.join(SITE_DIR, fname)
         if title not in inst or not os.path.exists(dst):
@@ -595,6 +596,7 @@ def v11_render(w):
         data = P.extract(dst, "D" if fname == "follow-audit.html" else "DATA")
         if data is None:
             continue
+        datas[title] = data
         full = fname.replace(".html", "-full.html")
         os.replace(dst, os.path.join(SITE_DIR, full))
         sv = w.saved(title)
@@ -602,7 +604,8 @@ def v11_render(w):
         at = w._ts(sv["at"]) if sv else datetime.fromtimestamp(os.path.getmtime(os.path.join(SITE_DIR, full))).astimezone()
         status = (sv or {}).get("status") or "Ran OK"
         if title == "Reply Queue":
-            body = P.reply_queue(data, sv)
+            posts = v._load(os.path.join(w.root(title), "posts.json"), {})
+            body = P.reply_queue(data, sv, {k: (p or {}).get("text", "") for k, p in posts.items() if isinstance(p, dict)})
         elif title == "Fan Finder":
             body = P.fan_finder(data, sv, store)
         elif title == "Follow Finder":
@@ -616,7 +619,10 @@ def v11_render(w):
             tiles = ((sv or {}).get("extra") or {}).get("tiles") or {}
             body = P.follow_audit(data, sv, tiles if "removed by X" in tiles else None)
         if sv:
-            body += "<h2>This run</h2>" + P.lines_html(sv["lines"] + [sv["spend"]])
+            run = [P.no_paid(l) for l in sv["lines"]] if title == "Follow Finder" else sv["lines"]
+            if title == "Reply Queue":
+                run = [l for l in run if "median time to reply" not in l.lower()]
+            body += "<h2>This run</h2>" + P.lines_html(run + [sv["spend"]])
         body += f'<p class="note"><a href="{full}">Full report</a></p>'
         with open(dst, "w", encoding="utf-8") as f:
             f.write(P.shell(title, P.SLUG(title), v.last_updated(at), status, body, P.store_to_marks(store),
@@ -634,7 +640,9 @@ def v11_render(w):
                 people[h]["ev"].append({"d": "", "b": title, "t": line})
     if mode in ("home", "crew") and built:
         panels = []
-        for n in v.home_panels():
+        first = ["Reply Queue", "Fan Finder", "Shoutout Picker", "Follow Audit"]  # default order, Customize can change it
+        order = sorted(v.home_panels(), key=lambda n: first.index(n) if n in first else len(first))
+        for n in order:
             if n == "Top fans":
                 continue
             sv = w.saved(n)
@@ -645,7 +653,23 @@ def v11_render(w):
             elif n == "Cost digest":
                 dg = w.digest()
                 lines = [dg] if isinstance(dg, str) else (dg or [])
-            panels.append(("p-" + P.SLUG(n), n, href, P.lines_html(lines)))
+            pb = P.lines_html(lines)
+            dt, st = datas.get(n), v.load_store(n) if n in inst else {}
+            if dt is not None:
+                if n == "Reply Queue":
+                    gone = {h.lower() for h in list(st.get("done") or {}) + list(st.get("never") or {})}
+                    pb = P.home_reply_queue([x for x in dt if (x.get("username") or "").lower() not in gone])
+                elif n == "Fan Finder":
+                    pb = P.home_fan_finder([x for x in dt if (x.get("username") or "").lower() not in {h.lower() for h in st.get("never") or {}}])
+                elif n == "Shoutout Picker":
+                    pb = P.home_shoutouts(dt, P.store_to_marks(st))
+                elif n == "Follow Audit":
+                    pb = P.home_unfollows(dt.get("since") if isinstance(dt, dict) else [])
+                elif n == "Follow Finder":
+                    pb = P.home_follow_finder(dt)
+                elif n == "Rerun Picker":
+                    pb = P.home_reruns(dt)
+            panels.append(("p-" + P.SLUG(n), n, href, pb))
         top = None
         if v.top_fans_visible():
             regs = ((w.saved("Reply Queue") or {}).get("extra") or {}).get("regulars") or {}
@@ -656,12 +680,17 @@ def v11_render(w):
             for k in marks:
                 marks[k].update(m[k])
         due = sum(1 for f in marks["follow_ups"].values() if f.get("on") and (f.get("due") or "") <= datetime.now().strftime("%Y-%m-%d"))
-        strip = [("follow-ups due", due)]
-        for n in inst:
-            t, _ = P.line_tiles(((w.saved(n) or {}).get("lines") or [])[:2])
-            if t and len(strip) < 5:
-                strip.append(t[0])
-        strip.append(("bots hosted", len(inst)))
+        strip = []
+        if "Reply Queue" in datas:
+            st = v.load_store("Reply Queue")
+            gone = {h.lower() for h in list(st.get("done") or {}) + list(st.get("never") or {})}
+            strip.append(("replies waiting", sum(1 for x in datas["Reply Queue"] if (x.get("username") or "").lower() not in gone)))
+        strip.append(("follow-ups due", due))
+        fe = w.follow_events(7)
+        if fe is not None:
+            strip.append(("new followers this week", fe["new"]))
+        today, cap = w.spend_days(1)
+        strip.append(("today's spend" + (f" of ${cap:.2f} cap" if cap else ""), f"${today:.2f}"))
         ok = [n for n in inst if (w.saved(n) or {}).get("status", "").startswith("Ran OK")]
         status = f"{len(ok)} of {len(inst)} bots ran OK on their last run."
         with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
@@ -670,6 +699,31 @@ def v11_render(w):
         built.append("index.html")
     built += v11_extra_pages(w, P, navitems, demo, hosted)
     return built
+
+
+def week_totals(w, P):
+    """7-day totals for Your week: [(label, value, secondary)] and the date range label, e.g. Oct 19 – Oct 25."""
+    v, inst = w.v11, w.v11.installed()
+    today = datetime.now().date()
+    start = date.fromordinal(today.toordinal() - 6)
+    label = f"{start.strftime('%b')} {start.day} – {today.strftime('%b')} {today.day}"
+    out = []
+    if "Reply Queue" in inst:
+        out.append(("replies handled", w.done_since("Reply Queue"), "marked done on the page or in chat"))
+        med = next((l for l in (w.saved("Reply Queue") or {}).get("lines", []) if "median time to reply" in l.lower()), "")
+        m = re.search(r"(\d+\s*(?:min|h|hr|hours?|minutes?)\b)", med)
+        out.append(("median time to reply", m.group(1) if m else "—", "over the last 7 days"))
+    if "Shoutout Picker" in inst:
+        out.append(("shoutouts done", w.done_since("Shoutout Picker"), ""))
+    fe = w.follow_events(7)
+    if fe is not None:
+        out.append(("new followers", fe["new"], ""))
+        out.append(("unfollows", fe["unfollowed"], f'plus {fe["gone"]} account gone' if fe["gone"] else "no accounts gone"))
+    if "Rerun Picker" in inst:
+        out.append(("reruns used", w.reruns_used(7), "your older posts quoted or reposted"))
+    spent, cap = w.spend_days(7)
+    out.append(("spend this week", f"${spent:.2f}", f"cap ${cap * 7:.2f} for 7 days (${cap:.2f} a day)" if cap else "no daily cap set"))
+    return out, label
 
 
 def _csv_rows(path):
@@ -708,6 +762,12 @@ def v11_extra_pages(w, P, navitems, demo, hosted):
             secs.append((title, fname, "No run yet", [], []))
             continue
         tiles, rest = P.line_tiles(sv["lines"] + [sv["spend"]])
+        if title == "Follow Finder":
+            tiles = [t for t in tiles if "paid" not in t[0]]
+            rest = [P.no_paid(l) for l in rest]
+            n = len(P.extract(os.path.join(SITE_DIR, "follow-finder-full.html"), "DATA") or []) if os.path.exists(os.path.join(SITE_DIR, "follow-finder-full.html")) else None
+            if n is not None:
+                tiles.insert(0, ("picks this run", n))
         for k, val in ((sv.get("extra") or {}).get("tiles") or {}).items():
             if all(k != t[0] for t in tiles):
                 tiles.append((k, val))
@@ -715,7 +775,8 @@ def v11_extra_pages(w, P, navitems, demo, hosted):
     if v.is_crew():
         secs.append(("Dispatch", "", "Bot health", [], w.health()))
     with open(os.path.join(SITE_DIR, "week.html"), "w", encoding="utf-8") as f:
-        f.write(P.shell("Your week", "week", v.last_updated(v.now()), f"{len(inst)} bots installed.", P.week(secs),
+        totals, label = week_totals(w, P)
+        f.write(P.shell("Your week", "week", v.last_updated(v.now()), f"{len(inst)} bots installed. Totals cover {label}.", P.week(secs, totals, label),
                         empty, navitems, demo, "", hosted))
     built.append("week.html")
     for title, old in P.OLD_FILES.items():

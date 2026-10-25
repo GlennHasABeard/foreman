@@ -221,7 +221,7 @@ def panel_analytics_log(name):
                           "follows": _num(r.get("new_follows") or r.get("follows")), "id": r.get("post_id", "")})
     lines = []
     if posts:
-        lines += ["Best hours: " + "; ".join(v11.best_times(posts))]
+        lines += ["Best hours: " + ", ".join(v11.best_times(posts))]
         fp = [x for x in v11.followers_per_post(posts) if x[0] > 0][:3]
         if fp:
             lines.append("Most follows from a post: " + ", ".join(f"{p} ({int(n)})" for n, p in fp))
@@ -488,3 +488,73 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
+
+# ---------- 7-day totals for Your week and Home ----------
+
+def _when(ts):
+    if isinstance(ts, (int, float)):
+        return datetime.fromtimestamp(ts, v11.UTC)
+    return _ts(ts)
+
+
+def done_since(name, days=7):
+    """Marks done (chat or page) in the last `days` days."""
+    if name not in v11.installed():
+        return None
+    cut = datetime.now(v11.UTC) - timedelta(days=days)
+    return sum(1 for t in (v11.load_store(name).get("done") or {}).values() if (_when(t) or cut) > cut)
+
+
+def spend_days(days=7):
+    """(spent over the last `days` days, daily cap or None). Crew ledger when crewed, else each bot's own ledger."""
+    today = datetime.now().date()
+    keep = {(today - timedelta(d)).isoformat() for d in range(days)}
+    if v11.is_crew():
+        leds = [_j(os.path.join(v11.home(), "dispatch", "spend_ledger.json"), {})]
+        cap = _j(os.path.join(v11.home(), "dispatch", "crew.json"), {}).get("daily_spend_cap")
+    else:
+        roots = sorted({root(n) for n in v11.installed()})
+        leds = [_j(os.path.join(r, "data", "spend_ledger.json"), {}) for r in roots]
+        caps = [_j(os.path.join(r, "config.json"), {}).get("daily_spend_cap") for r in roots]
+        caps = [float(c) for c in caps if isinstance(c, (int, float))]
+        cap = sum(caps) if caps else None
+    tot = 0.0
+    for led in leds:
+        for k, v in (led.items() if isinstance(led, dict) else []):
+            if k in keep:
+                tot += float((v.get("spent", v.get("total", 0)) if isinstance(v, dict) else v) or 0)
+    return tot, (float(cap) if cap is not None else None)
+
+
+def follow_events(days=7):
+    """Follow Audit events.csv over the last `days` days -> {new, unfollowed, gone}."""
+    if "Follow Audit" not in v11.installed():
+        return None
+    cut = datetime.now(v11.UTC) - timedelta(days=days)
+    out = {"new": 0, "unfollowed": 0, "gone": 0}
+    for r in _csv(os.path.join(root("Follow Audit"), "data", "events.csv")):
+        t = _ts(r.get("ts") or "")
+        if not t or t < cut:
+            continue
+        e = (r.get("event") or "").lower()
+        if e in ("new_follower", "followed_you", "follow"):
+            out["new"] += 1
+        elif e in ("unfollowed_you", "unfollow"):
+            out["unfollowed"] += 1
+        elif e in ("gone", "account_gone", "suspended", "deactivated"):
+            out["gone"] += 1
+    return out
+
+
+def reruns_used(days=7):
+    """Your own older posts you quoted or reposted in the last `days` days (from Rerun Picker's posts.json),
+    plus any marked done in chat. None when Rerun Picker isn't installed."""
+    if "Rerun Picker" not in v11.installed():
+        return None
+    posts = _j(os.path.join(root("Rerun Picker"), "posts.json"), {})
+    posts = posts if isinstance(posts, dict) else {}
+    cut = datetime.now(v11.UTC) - timedelta(days=days)
+    n = sum(1 for p in posts.values() if isinstance(p, dict) and (p.get("quoted") or p.get("reposted")) in posts
+            and (_ts(p.get("created") or "") or cut) > cut)
+    return n + (done_since("Rerun Picker", days) or 0)

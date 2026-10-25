@@ -333,7 +333,7 @@ def median_line(post_times, name=None):
     for days in (7, 30):
         m = median_reply(post_times, days, name)
         parts.append(f"{days} days: " + (f"{m:.0f} min" if m is not None else "no done marks yet"))
-    return "Median time to reply, from done marks. " + "; ".join(parts)
+    return "Median time to reply, from done marks. " + ", ".join(parts)
 
 
 def timeline(h, name=None, extra_events=()):
@@ -648,7 +648,8 @@ def queue_sort(items, key="time", only=None):
 
 
 def draft_prefill(item):
-    return f"@{_h(item['who'])} "
+    """Reply drafts start empty: X adds the @mention to a reply itself."""
+    return ""
 
 
 # Fan Finder

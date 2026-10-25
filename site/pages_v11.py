@@ -18,7 +18,12 @@ import re
 from datetime import datetime
 from urllib.parse import quote
 
-E = html.escape
+def E(x, quote=True):
+    """Escape page text. Page copy never shows a semicolon, so '; ' becomes ', '."""
+    return html.escape(re.sub(r"\s*;\s*", ", ", str(x)), quote=quote)
+
+
+RAW = html.escape  # posts, drafts and links exactly as written
 SLUG = lambda n: n.lower().replace(" ", "-")  # noqa: E731
 FILES = {"Reply Queue": "reply-queue.html", "Fan Finder": "fan-finder.html", "Follow Finder": "follow-finder.html",
          "Shoutout Picker": "shoutout-picker.html", "Rerun Picker": "rerun-picker.html", "Follow Audit": "follow-audit.html",
@@ -85,6 +90,8 @@ z-index:30;transform:translateX(105%);transition:transform .2s;overflow:auto;pad
 .demo{position:fixed;right:10px;bottom:10px;font-size:11px;padding:3px 8px;border-radius:6px;background:var(--soft);
 border:1px solid var(--line);color:var(--mute);z-index:4}
 .strip{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.item{padding:8px 0;border-top:1px solid var(--line)}.item:first-of-type{border-top:0}.item .txt{margin:4px 0}.item .btns{margin-top:4px}
+.tile .nm{margin-top:4px;font-size:12px}
 .tbl{width:100%;border-collapse:collapse;font-size:14px}.tbl th,.tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);
 vertical-align:top;overflow-wrap:anywhere}.tbl th{font-size:12px;color:var(--mute);font-weight:600}.tbl td.n,.tbl th.n{text-align:right;white-space:nowrap}
 .prog{height:12px;border-radius:999px;background:var(--soft);border:1px solid var(--line);overflow:hidden;margin:6px 0}
@@ -227,8 +234,15 @@ def _medv(line):
     return m.group(1) if m else "–"
 
 
-def reply_queue(items, saved):
-    """items: Reply Queue DATA rows {key, username, chips, text, links, g}."""
+def snippet(text, words=6):
+    w = re.sub(r"https?://\S+", "", str(text or "")).split()
+    return " ".join(w[:words]) + ("…" if len(w) > words else "") if w else ""
+
+
+def reply_queue(items, saved, post_text=None):
+    """items: Reply Queue DATA rows {key, username, chips, text, links, g}.
+    post_text: {post id: text} from the bot's posts.json, for the Drowning posts list."""
+    post_text = post_text or {}
     ex = (saved or {}).get("extra") or {}
     regs = {k.lower(): v for k, v in (ex.get("regulars") or {}).items()}
     rows, posts = [], {}
@@ -243,12 +257,15 @@ def reply_queue(items, saved):
                      "g": x.get("g", "")})
     drown = sorted(((len(v), p, v) for p, v in posts.items()), reverse=True)[:5]
     med = next((l for l in (saved or {}).get("lines", []) if l.startswith("Median time to reply")), "Median time to reply: no done marks yet")
-    dr = "".join(f'<li><a href="{E(p)}" target="_blank" rel="noopener">Your post</a>: {n} waiting '
+    def ptitle(url):
+        pid = url.rstrip("/").split("/")[-1].split("?")[0]
+        return snippet(post_text.get(pid, "")) or f"Post ending {pid[-4:]}"
+    dr = "".join(f'<li><a href="{E(p)}" target="_blank" rel="noopener">{E(ptitle(p))}</a>: {n} waiting '
                  f'({E(", ".join("@" + u for u in sorted(set(v))[:4]))})</li>' for n, p, v in drown if n > 1)
     body = (f'<div class="tiles"><div class="tile"><b id="rq-open">{len(rows)}</b><span>waiting on a reply</span></div>'
             f'<div class="tile"><b id="rq-med">{E(_medv(med))}</b>'
             f'<span>median time to reply (7 days)</span></div><div class="tile"><b>{len([r for r in rows if r["reg"]])}</b>'
-            f'<span>from regulars</span></div></div><p class="note">{E(med)}</p>'
+            f'<span>from regulars</span></div></div>'
             + (f'<h2>Drowning posts</h2><ul class="plain">{dr}</ul>' if dr else "")
             + '<h2>Queue</h2><div class="tools"><div class="seg" id="rq-f">'
             + "".join(f'<button type="button" data-f="{f}" class="{"on" if f == "all" else ""}">{t}</button>'
@@ -259,8 +276,8 @@ def reply_queue(items, saved):
             + data_script("rq-data", rows) + "<script>" + r"""
 (function(){var D=JSON.parse(document.getElementById("rq-data").textContent),V=window.V11,f="all",s="m";
 function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
-function ri(id,t){return "https://x.com/intent/post?in_reply_to="+encodeURIComponent(id)+"&text="+encodeURIComponent(t)}
-function card(x){var done=V.on("done",x.u),dr=localStorage.getItem("v11-draft-"+x.k)||("@"+x.u+" ");
+function ri(id,t){return "https://x.com/intent/post?in_reply_to="+encodeURIComponent(id)+(t?"&text="+encodeURIComponent(t):"")}
+function card(x){var done=V.on("done",x.u),dr=localStorage.getItem("v11-draft-"+x.k)||"";
  return '<div class="card'+(done?' done':'')+'" data-h="'+esc(x.u)+'"><div class="row"><div class="grow">'+
  '<a class="who" href="https://x.com/'+esc(x.u)+'" target="_blank" rel="noopener">@'+esc(x.u)+'</a> <span class="nm">'+esc(x.kind)+'</span>'+
  '<div class="chips">'+(x.reg?'<span class="chip strong">Regular · '+x.reg+' conversations</span>':'')+
@@ -345,8 +362,9 @@ def follow_finder(items, saved, follows_chip):
         rows.append({"u": c.get("username", ""), "n": c.get("name", ""), "f": fol, "fg": c.get("following", 0),
                      "bio": c.get("bio", ""), "you": bool(c.get("follows_you")) and follows_chip, "eng": round(eng, 2),
                      "post": ((c.get("top_posts") or [{}])[0]).get("text", ""), "pid": ((c.get("top_posts") or [{}])[0]).get("id", ""), "i": i})
-    strip = next((l for l in (saved or {}).get("lines", []) if "kept" in l.lower() or "pre-screen" in l.lower()), "")
-    body = ((f'<p class="note">{E(strip)}</p>' if strip else "")
+    strip = no_paid(next((l for l in (saved or {}).get("lines", []) if "kept" in l.lower() or "pre-screen" in l.lower()), ""))
+    body = (tiles_html([("picks this run", len(rows)), ("followed you already", sum(1 for r in rows if r["you"]))])
+            + (f'<p class="note">{E(strip)}</p>' if strip else "")
             + '<div class="tools"><div class="seg" id="sc-t"><button type="button" class="on" data-t="list">Shortlist</button>'
               '<button type="button" data-t="never">Never show <span id="sc-nc"></span></button></div>'
               '<select id="sc-s"><option value="eng">Engagement per follower</option><option value="f">Followers</option>'
@@ -374,6 +392,11 @@ document.addEventListener("click",function(e){var b=e.target.closest("[data-neve
  else{V.set("never",b.getAttribute("data-undo"),{on:false})}});
 })();</script>""")
     return body
+
+
+def no_paid(line):
+    """Drop the 'N paid lookups/checks skipped' part of a Follow Finder line. Picks this run replaces it."""
+    return re.sub(r",?\s*\d+ paid (?:lookups|checks) skipped", "", line or "").strip(" ,")
 
 
 # ---------------------------------------------------------------- Shoutout Picker
@@ -436,10 +459,10 @@ def rerun_picker(items, saved, similar, sponsor):
                    f'<span class="chip">{int(r.get("views") or 0):,} views</span><span class="chip">{E(r.get("format", ""))}</span>'
                    f'<span class="chip">posted {E(r.get("date", ""))}</span>'
                    f'<span class="chip">last rerun: {E(r.get("last") or "never")}</span>{ch}</div>'
-                   f'<div class="txt">{E(r.get("text", ""))}</div>'
+                   f'<div class="txt">{RAW(r.get("text", ""))}</div>'
                    + (f'<p><b>New angle:</b> {E(r["angle"])}</p>' if r.get("angle") else "")
-                   + f'<label class="note">Quote-post text</label><textarea data-u="{E(r.get("url", ""))}">{E(draft)}</textarea>'
-                   f'<div class="btns"><a class="btn pri" data-q target="_blank" rel="noopener" href="{E(intent_post(draft, r.get("url", "")))}">Quote it</a>'
+                   + f'<label class="note">Quote-post text</label><textarea data-u="{RAW(r.get("url", ""))}">{RAW(draft)}</textarea>'
+                   f'<div class="btns"><a class="btn pri" data-q target="_blank" rel="noopener" href="{RAW(intent_post(draft, r.get("url", "")))}">Quote it</a>'
                    f'<a class="btn" target="_blank" rel="noopener" href="{E(r.get("url", ""))}">Open original</a></div></div>')
     js = ("<script>document.addEventListener('input',function(e){var t=e.target;if(!t.dataset||!t.dataset.u)return;"
           "t.parentNode.querySelector('[data-q]').href='https://x.com/intent/post?text='+encodeURIComponent(t.value)+'&url='+encodeURIComponent(t.dataset.u)})</script>")
@@ -540,10 +563,90 @@ def home(panels, people, top_fans, strip):
     fu = panel("p-followups", "Follow-ups due", "", '<ul class="plain" id="fu-list"></ul>'
                '<p class="note">Tap any @name for their timeline, notes and follow-up.</p>')
     tiles = "".join(f'<div class="tile"><b>{E(str(v))}</b><span>{E(k)}</span></div>' for k, v in strip)
-    return (f'<div class="tiles">{tiles}</div><div class="tools"><button type="button" id="cust">Customize</button>'
+    return (f'<div class="tiles strip">{tiles}</div><div class="tools"><button type="button" id="cust">Customize</button>'
             f'<span class="note">Reorder or hide panels. Saved on this device and, when hosted, across devices.</span></div>'
             f'<div id="panels">{fu}{tf}' + "".join(panel(*p) for p in panels) + '</div><aside class="drawer" id="drawer"></aside>'
             + data_script("home-people", people) + f"<script>{HOME_JS}</script>")
+
+
+# Home panels: real items with their buttons, not run summaries.
+
+def _who(u):
+    return f'<a class="who" href="https://x.com/{E(u)}" target="_blank" rel="noopener">@{E(u)}</a>'
+
+
+def home_reply_queue(rows, n=5):
+    """rows: Reply Queue DATA rows still waiting (done already removed). Top n, mentions first."""
+    rows = sorted(rows, key=lambda x: (((x.get("chips") or [{}])[0].get("t") or "").lower() != "mention"))[:n]
+    if not rows:
+        return '<p class="note">Nothing waiting. Nice.</p>'
+    return "".join(
+        f'<div class="item">{_who(x.get("username", ""))} <span class="nm">{E(((x.get("chips") or [{}])[0].get("t") or "reply").lower())}'
+        f'{" · " + E(x["chips"][1]["t"]) if len(x.get("chips") or []) > 1 else ""}</span>'
+        f'<div class="txt">{RAW(snippet(x.get("text", ""), 14))}</div><div class="btns">'
+        f'<a class="btn pri" target="_blank" rel="noopener" href="{RAW(intent_reply(x.get("key", "")))}">Reply</a>'
+        f'<a class="btn" target="_blank" rel="noopener" href="{RAW(((x.get("links") or [{}])[0]).get("u", ""))}">Open</a></div></div>'
+        for x in rows)
+
+
+def home_fan_finder(rows, n=3):
+    rows = rows[:n]
+    if not rows:
+        return '<p class="note">No new fans this run.</p>'
+    return "".join(
+        f'<div class="item">{_who(x.get("username", ""))} <span class="nm">{E(", ".join(c.get("t", "") for c in (x.get("chips") or [])[:1]))}</span>'
+        f'<div class="chips"><span class="chip strong">Why: {E(" + ".join(c.get("t", "") for c in (x.get("chips") or [])[2:]) or "engaged with you")}</span></div>'
+        f'<div class="btns"><a class="btn" target="_blank" rel="noopener" href="https://x.com/{E(x.get("username", ""))}">Open profile</a></div></div>'
+        for x in rows)
+
+
+def home_follow_finder(rows, n=3):
+    rows = rows[:n]
+    if not rows:
+        return '<p class="note">No picks this run.</p>'
+    return "".join(
+        f'<div class="item">{_who(c.get("username", ""))} <span class="nm">{E(c.get("name", ""))} · {int(c.get("followers") or 0):,} followers</span>'
+        f'<div class="txt">{RAW(snippet(c.get("bio", ""), 12))}</div></div>' for c in rows)
+
+
+def home_reruns(rows, n=2):
+    rows = rows[:n]
+    if not rows:
+        return '<p class="note">No picks this week.</p>'
+    return "".join(
+        f'<div class="item"><span class="chip strong">{E(str(r.get("ratio", "")))} vs typical</span> '
+        f'<div class="txt">{RAW(snippet(r.get("text", ""), 12))}</div><div class="btns">'
+        f'<a class="btn" target="_blank" rel="noopener" href="{RAW(r.get("url", ""))}">Open original</a></div></div>' for r in rows)
+
+
+def home_shoutouts(rows, marks):
+    """This week's picks with Done. Done saves to the Shoutout Picker page marks (same KV key)."""
+    if not rows:
+        return '<p class="note">No picks this week.</p>'
+    items = [{"u": x.get("username", ""), "f": x.get("followers") or 0} for x in rows]
+    return ('<div id="hso-list"></div>' + data_script("hso-data", items) + data_script("hso-marks", marks) + "<script>" + r"""
+(function(){var D=JSON.parse(document.getElementById("hso-data").textContent),V=window.V11,LK="v11-marks-shoutout-picker",
+API="/api/checks?page=marks-shoutout-picker",M={never:{},done:{},stages:{},notes:{},follow_ups:{}};
+V.merge(M,JSON.parse(document.getElementById("hso-marks").textContent));try{V.merge(M,JSON.parse(localStorage.getItem(LK)||"null"))}catch(e){}
+function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
+function on(h){var e=M.done[h.toLowerCase()];return !!(e&&e.on)}
+function render(){document.getElementById("hso-list").innerHTML=D.map(function(x){var o=on(x.u);
+ return '<div class="item row'+(o?' done':'')+'"><div class="grow"><a class="who" target="_blank" rel="noopener" href="https://x.com/'+esc(x.u)+'">@'+esc(x.u)+
+ '</a> <span class="nm">'+x.f.toLocaleString()+' followers</span></div><button type="button" class="'+(o?'on':'')+'" data-hso="'+esc(x.u)+'">'+(o?'Done ✓':'Done')+'</button></div>'}).join("")}
+function save(){try{localStorage.setItem(LK,JSON.stringify(M))}catch(e){}
+ if(V.hosted&&!V.preview)fetch(API,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(M)}).catch(function(){V.offline()})}
+if(V.hosted&&!V.preview)fetch(API,{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(s){if(s&&typeof s==="object"){V.merge(M,s);render()}}).catch(function(){});
+document.getElementById("hso-list").addEventListener("click",function(e){var b=e.target.closest("[data-hso]");if(!b)return;var h=b.getAttribute("data-hso").toLowerCase(),was=on(h);
+ M.done[h]={on:!was,ts:new Date().toISOString()};save();render();if(!was)V.toast("Marked @"+h+" done.",function(){M.done[h]={on:false,ts:new Date().toISOString()};save();render()})});
+V.renderers.push(render);})();</script>""")
+
+
+def home_unfollows(since, n=5):
+    rows = sorted([e for e in since or [] if e.get("e") in ("unfollowed_you", "gone")], key=lambda e: e.get("d") or "", reverse=True)[:n]
+    if not rows:
+        return '<p class="note">Nobody since the last scan.</p>'
+    return "".join(f'<div class="item">{_who(e["u"])} <span class="nm">{"unfollowed you" if e["e"] == "unfollowed_you" else "account gone"}'
+                   f'{", " + E(e["note"]) if e.get("note") else ""} · {E(e.get("d", ""))}</span></div>' for e in rows)
 
 
 def lines_html(lines):
@@ -603,7 +706,7 @@ def analytics_log(posts, followers, verified, monetized, sv=None, goal=500000, d
         + '<p class="note">From the posts Analytics Log has pulled. More posts make this steadier.</p></div>')
     top = sorted(ps, key=lambda p: (-p["fol"], -p["imp"]))[:10]
     rows = "".join(f'<tr><td>{(f"<a href=\"{E(p["link"])}\" target=\"_blank\" rel=\"noopener\">" if p["link"] else "")}'
-                   f'{E(p["text"][:90] or p["id"])}{"</a>" if p["link"] else ""}<div class="nm">{E(p["ts"].strftime("%b %d"))}</div></td>'
+                   f'{RAW(p["text"][:90] or p["id"])}{"</a>" if p["link"] else ""}<div class="nm">{E(p["ts"].strftime("%b %d"))}</div></td>'
                    f'<td class="n">{_fmt(p["fol"])}</td><td class="n">{_fmt(p["imp"])}</td></tr>' for p in top)
     fp = ('<div class="card"><h2 style="margin-top:0">Followers gained per post</h2>' + (
         f'<table class="tbl"><tr><th>Post</th><th class="n">Follows</th><th class="n">Impressions</th></tr>{rows}</table>'
@@ -643,6 +746,8 @@ def line_tiles(lines):
             m = _NUM.match(part)
             if m and m.group("lab2") and (m.end() != len(part) or "(" in part or ")" in part):
                 m = None
+            if m and m.end() != len(part):
+                m = None  # "Bench is low: 2 left for 4 slots" stays a line, not a "bench is low: 2" tile
             if m and len(tiles) < 8:
                 lab = (m.group("lab") or m.group("lab2") or "").strip()
                 val = m.group("v1") or m.group("v2")
@@ -656,16 +761,27 @@ def line_tiles(lines):
     return tiles, rest
 
 
-def week(sections):
-    """sections: [(bot, href, status, tiles [(label, value)], lines)]. One card per installed bot."""
+def week_tiles(totals):
+    """totals: [(label, value, secondary line)]. Clean number tiles, the full line under each."""
+    return '<div class="tiles strip">' + "".join(
+        f'<div class="tile"><b>{E(str(v))}</b><span>{E(k)}</span>' + (f'<div class="nm">{E(sub)}</div>' if sub else "") + "</div>"
+        for k, v, sub in totals) + "</div>"
+
+
+def week(sections, totals=None, label=""):
+    """sections: [(bot, href, status, tiles [(label, value)], lines)]. One card per installed bot.
+    totals: 7-day totals [(label, value, secondary)] shown first, under the date range label."""
+    top = ""
+    if totals:
+        top = f'<h2>Last 7 days, {E(label)}</h2>' + week_tiles(totals) + '<h2>Each bot\'s last run</h2>'
     if not sections:
-        return '<p class="note">No bot has run yet this week.</p>'
+        return top + '<p class="note">No bot has run yet this week.</p>'
     cards = []
     for bot, href, status, tiles, lines in sections:
         t = f'<a href="{E(href)}">{E(bot)}</a>' if href else E(bot)
         cards.append(f'<div class="card"><h2>{t}</h2><p class="note" style="margin:0 0 4px">{E(status)}</p>'
                      + (tiles_html(tiles) if tiles else "") + (lines_html(lines) if lines else "") + "</div>")
-    return '<div class="wk">' + "".join(cards) + "</div>"
+    return top + '<div class="wk">' + "".join(cards) + "</div>"
 
 
 def redirect(to):

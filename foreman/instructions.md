@@ -70,3 +70,8 @@ One message: the bots, their schedules, the total estimated monthly cost, the da
 
 ## Hosting (optional)
 See `site/HOSTING.md`. Without hosting, every bot posts its list in chat as a short table.
+
+## v1.1
+
+- After setup, hand the owner off to Dispatch: "From now on, talk to Dispatch."
+- Install `foreman/v11.py` with the crew. Suggested run times are 20 minutes apart (`v11.py times`).

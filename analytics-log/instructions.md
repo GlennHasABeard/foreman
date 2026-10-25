@@ -37,3 +37,24 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
 - Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
 - If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.
+
+## v1.1
+
+- Mode: `CREW_BOT="Analytics Log" python3 /workspace/foreman/foreman/v11.py mode` prints chat (not hosted), own page (the only hosted bot: anything that would be on Home, like follow-ups and status, goes on this bot's own page) or home (two or more hosted bots: Home shows panels only for installed bots).
+- Status line on this bot's page (or at the top of its chat report).
+- A refused or failed read says so ("not read, X refused permission"). Never a quiet 0.
+- Sign-in rules are the shared ones above. After a box restore, the first run does a small sign-in check before any catch-up and stops or warns if it fails.
+- Chat reports are short: counts, anything notable, cost and the page link. The full list goes in chat only if hosting is off or the publish failed. Pages are plain light and dark with real buttons and "Last updated" (coral when stale). Every publish is logged OK or failed.
+- Analytics Log uses the browser, not the X API, so it has no X spend cap or billing check.
+- Suggested run times are spaced 20 minutes apart from other bots here (`v11.py times <start> <n>`).
+- Finish card checks the pull behind the scenes and only speaks up when something is off, with a short UTC note.
+- Best time of day hints and followers gained per post.
+- The 500K window chart shows only on monetized accounts.
+- Thinner night pull: audience, 1-year video and heatmap move to the weekly night pull.
+- Google Sheet rows are opt-in: only when the owner gives their own sheet ID (`sheet_id`). Otherwise rows go to a local CSV.
+- Optional X archive backfill (offline).
+- Your week on X: sections only for the bots installed (alone: impressions and followers).
+- Chat commands work with or without hosting and save in this bot's own files (`data/chat_store-<slug>.json`). Hosted pages save the same marks in KV and both are merged, so nothing stops working without hosting. When the owner's message is one of these, run `CREW_BOT="Analytics Log" python3 /workspace/foreman/foreman/v11.py chat "<message>"` and reply with what it prints:
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted

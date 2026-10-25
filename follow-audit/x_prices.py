@@ -13,9 +13,27 @@ Kinds:
 
 The billing check on the X developer console confirms the table. It does not set it.
 """
+import json
+import os
 import re
 
-RATES = {"owned": 0.001, "post": 0.005, "user": 0.010, "attached_user": 0.010}
+# v1.1: profiles attached to post reads are priced at $0.00 (X did not bill them in testing).
+# The nightly billing check (foreman/v11.py) writes the switch file and puts $0.010 back only if
+# X billed more user lookups than the bots logged.
+OLD_ATTACHED = 0.010
+
+
+def _switch():
+    p = os.environ.get("X_PRICE_SWITCH", os.path.join(os.environ.get("BOTS_HOME", "/workspace/bots"),
+                                                      ".shared", "x_price_switch.json"))
+    try:
+        with open(p, encoding="utf-8") as f:
+            return bool(json.load(f).get("attached_user_billed"))
+    except Exception:
+        return False
+
+
+RATES = {"owned": 0.001, "post": 0.005, "user": 0.010, "attached_user": OLD_ATTACHED if _switch() else 0.0}
 
 TABLE = [
     ("owned", "GET /users/:me/tweets (your posts)", "owned read"),
@@ -28,7 +46,7 @@ TABLE = [
     ("post", "GET /tweets/:id/quote_tweets", "post read"),
     ("post", "GET /users/:other/tweets and /tweets?ids= (other people's posts)", "post read"),
     ("user", "GET /users/me, /users/by, /users", "user read"),
-    ("attached_user", "each profile in includes.users", "user read"),
+    ("attached_user", "each profile in includes.users", "$0 since v1.1, switch puts $0.010 back"),
 ]
 
 _OWNABLE = re.compile(r"/users/([^/]+)/(tweets|mentions|liked_tweets)$")

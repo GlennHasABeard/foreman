@@ -34,7 +34,8 @@ The X API is pay per use. Every bot and the spend ledger use one price table, `f
 |---|---|
 | Your own data: your posts, mentions, likes, followers, following and the likers of your posts | $0.001 |
 | Other people's posts: search, quote posts, someone else's posts | $0.005 |
-| A profile lookup, or a profile attached to a post | $0.010 |
+| A profile lookup | $0.010 |
+| A profile attached to a post (v1.1) | $0.000, a nightly billing check puts $0.010 back if X bills them |
 
 Check the table against the X developer console after the first days. If X bills a kind of read at a different rate, change it in that one file. The numbers above come from one real account's first week. Billed amounts came in at about 65 to 100 percent of the scripts' own estimates. With every bot on its normal schedule, expect roughly $30 to $80 a month. A light setup (Dispatch, Follow Audit light checks, Rerun Picker, Analytics Log) is a few dollars a month.
 
@@ -129,6 +130,13 @@ Each of the seven bots is also its own template. Open the bot's template link be
 - [Analytics Log](https://x.ai/bot/TuAu34Lz2_zupuT5qlai3)
 
 The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.0.1 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+
+What's new in v1.1 for individual templates (each template's release notes list only what it got, see PATCH-NOTES.md):
+
+- No hosting needed. Anything a hosted page saves (Never show, Show again, stages, Done and Pending, done marks for median time to reply, notes and the per-person timeline) also works by chat and saves in the bot's own files: `never show @name`, `show @name again`, `@name is talked`, `mark @name done`, `show me everything from @name`, `note @name ...`.
+- One hosted bot: its own page is its home. Follow-ups and status show there. Two or more hosted: Home shows panels only for the bots installed.
+- Spend: each template keeps its own cap, month forecast and weekly cost digest. Estimate next to what X billed needs console.x.com signed in in the bot's browser. Without it, spend shows as labeled estimates and setup says once how to turn on the billed check.
+- Shared: update notice, attached profiles at $0, refused reads say so (never a quiet 0), sign-in check after a box restore, shared publish cache with OK/failed log, short chat reports with the page link, light and dark pages with real buttons and Last updated, a shared profile cache when more than one bot is here, and suggested run times 20 minutes apart.
 
 How an individual template handles money and sign-in:
 

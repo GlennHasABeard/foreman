@@ -33,3 +33,20 @@ Two or three lines: what you do, when you run (only if the owner asked for a sch
 ## Updates
 
 Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.
+
+## New in v1.1
+`foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- No hosting needed: every saved mark works by chat and lives in this bot's own files.
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
+- One hosted bot: its own page is its home, and follow-ups show there.
+- Billing: say the one-time billed-check line from `v11.py billing-setup-note` during setup. Until console.x.com is signed in in the bot's browser, spend shows as labeled estimates.
+
+What this bot got in v1.1:
+- Follower and following tiles use the newest live profile counts with an as-of time (Analytics Log's last pull if installed, otherwise this bot's own account read).
+- Plain wording: "Unfollowed you" for named people who left, "Account gone" for suspended, deactivated or not-found accounts (from the per-name lookup), and "followers lost" for the unnamed daily count.
+- The daily check reads your newest followers. The size is a setting (`newest_check_size`, default 350) and its cost is shown first (`v11.newest_check_cost`).
+- X's own unfollow count and "Removed by X" show only when Analytics Log is installed. Otherwise the tile says "followers lost".
+- New followers tab (last 30 days), 4-week chart of gains, losses and new mutuals, and a 5-line Top risks box.
+- Light-only nights skip rebuilding the full report and page when the full data has not changed.

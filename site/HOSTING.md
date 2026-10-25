@@ -13,3 +13,7 @@ Lists can be hosted on Cloudflare for free so each list has a stable private lin
 7. Test locally first: `python3 publish_lists.py --dry-run`, then open `site/public/index.html`.
 
 The look is one plain black and white template with system fonts. Page scripts kept: hide checked rows, sync checks (KV), a Lists menu to move between lists, and Never show on Follow Finder.
+
+## v1.1
+
+Home shows panels only for installed bots. With one hosted bot there is no Home: that bot's page is home and gets follow-ups and its status line. Without hosting, every KV feature works by chat and saves in the bot's own files (see each guide). Pages use `foreman/v11.py` page design: plain light and dark, real buttons, Last updated in coral when stale.

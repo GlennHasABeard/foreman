@@ -23,3 +23,20 @@ Two or three lines: what you do, what it costs ($0 in API fees), and how to ask 
 ## Updates
 
 Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.
+
+## New in v1.1
+`foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- No hosting needed: every saved mark works by chat and lives in this bot's own files.
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
+- One hosted bot: its own page is its home, and follow-ups show there.
+
+What this bot got in v1.1:
+- Finish card checks the pull behind the scenes and only speaks up when something is off, with a short UTC note.
+- Best time of day hints and followers gained per post.
+- The 500K window chart shows only on monetized accounts.
+- Thinner night pull: audience, 1-year video and heatmap move to the weekly night pull.
+- Google Sheet rows are opt-in: only when the owner gives their own sheet ID (`sheet_id`). Otherwise rows go to a local CSV.
+- Optional X archive backfill (offline).
+- Your week on X: sections only for the bots installed (alone: impressions and followers).

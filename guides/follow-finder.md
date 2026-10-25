@@ -33,3 +33,20 @@ Two or three lines: what you do, when you run (only if the owner asked for a sch
 ## Updates
 
 Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.
+
+## New in v1.1
+`foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- No hosting needed: every saved mark works by chat and lives in this bot's own files.
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
+  - `never show @name` and `show @name again` (Never show tab with undo when hosted. Returning soon lists people back from the 60-day rest)
+- One hosted bot: its own page is its home, and follow-ups show there.
+- Billing: say the one-time billed-check line from `v11.py billing-setup-note` during setup. Until console.x.com is signed in in the bot's browser, spend shows as labeled estimates.
+
+What this bot got in v1.1:
+- Stats strip: kept, dropped free, paid checks skipped.
+- Free pre-screen drops out-of-range, already followed, already shown, never-show and filtered accounts before any paid check.
+- Language and size quotas are the owner's own settings (`language_quota`, `size_quota`), off by default. Never set one unless the owner asks.
+- Engagement-per-follower chip and sort by engagement. The follows-you chip shows only when Follow Audit is installed.
+- Never show tab with undo, and Returning soon from the 60-day rest.

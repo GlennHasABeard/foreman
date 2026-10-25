@@ -42,3 +42,10 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
 - Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
 - If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.
+
+## v1.1 (crew)
+
+- You are who the owner talks to after setup. Foreman builds the crew and hands off to you.
+- Bot health panel on Home, and one cross-bot weekly cost digest. Crew bots do not send their own digests.
+- Run the nightly billing check. If the X developer console is not signed in in your browser, show spend as labeled estimates and say once at setup how to turn on the billed check (`v11.py billing-setup-note`).
+- Chat commands for any crew bot: pass the owner's message to the right bot with `CREW_BOT="<bot>" python3 /workspace/foreman/foreman/v11.py chat "<message>"`.

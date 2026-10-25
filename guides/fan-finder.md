@@ -33,3 +33,21 @@ Two or three lines: what you do, when you run (only if the owner asked for a sch
 ## Updates
 
 Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.
+
+## New in v1.1
+`foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+- No hosting needed: every saved mark works by chat and lives in this bot's own files.
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
+  - `never show @name` and `show @name again` (hidden leads show "back in N days")
+  - `@name is new|engaged|talked|done` sets the stage
+- One hosted bot: its own page is its home, and follow-ups show there.
+- Billing: say the one-time billed-check line from `v11.py billing-setup-note` during setup. Until console.x.com is signed in in the bot's browser, spend shows as labeled estimates.
+
+What this bot got in v1.1:
+- Reuses Reply Queue's pull when installed and under 12 hours old ("Pull from Reply Queue, Nh ago, $0 extra"). Otherwise it does its own pull and shows the pull age and cost line.
+- Left out list with a plain reason per person, and each person's queue position.
+- Show again and "back in N days" for hidden leads.
+- Likes banner: "new likes not read, stored likes still scored".
+- Stages (new, engaged, talked, done) and the warm score broken into its parts.

@@ -41,3 +41,25 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. It downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner the download failed its check and stop.
 - Never update, download or reinstall without that yes. A no, or no answer, means stay on the current version. It asks again only when an even newer release comes out or the owner brings it up.
 - If it says FLAGGED, mention once that the update check could not reach GitHub. Nothing else changes.
+
+## v1.1
+
+- Mode: `CREW_BOT="Follow Finder" python3 /workspace/foreman/foreman/v11.py mode` prints chat (not hosted), own page (the only hosted bot: anything that would be on Home, like follow-ups and status, goes on this bot's own page) or home (two or more hosted bots: Home shows panels only for installed bots).
+- Status line on this bot's page (or at the top of its chat report).
+- A refused or failed read says so ("not read, X refused permission"). Never a quiet 0.
+- Sign-in rules are the shared ones above. After a box restore, the first run does a small sign-in check before any catch-up and stops or warns if it fails.
+- Chat reports are short: counts, anything notable, cost and the page link. The full list goes in chat only if hosting is off or the publish failed. Pages are plain light and dark with real buttons and "Last updated" (coral when stale). Every publish is logged OK or failed.
+- Prices: profiles attached to post reads are $0.00. The nightly billing check puts $0.010 back only if X billed more user lookups than were logged.
+- Spend: own daily cap, month forecast and a weekly cost digest. Estimate next to billed needs the X developer console signed in in this bot's browser. If it is not, show spend as estimates, clearly labeled, and say once at setup: `python3 /workspace/foreman/foreman/v11.py billing-setup-note`. Never hide spend or fail because the console is not signed in.
+- When more than one bot is installed, profiles looked up in the last day are shared so nobody is paid for twice. Alone, the cache is off.
+- Suggested run times are spaced 20 minutes apart from other bots here (`v11.py times <start> <n>`).
+- Stats strip: kept, dropped free, paid checks skipped.
+- Free pre-screen drops out-of-range, already followed, already shown, never-show and filtered accounts before any paid check.
+- Language and size quotas are the owner's own settings (`language_quota`, `size_quota`), off by default. Never set one unless the owner asks.
+- Engagement-per-follower chip and sort by engagement. The follows-you chip shows only when Follow Audit is installed.
+- Never show tab with undo, and Returning soon from the 60-day rest.
+- Chat commands work with or without hosting and save in this bot's own files (`data/chat_store-<slug>.json`). Hosted pages save the same marks in KV and both are merged, so nothing stops working without hosting. When the owner's message is one of these, run `CREW_BOT="Follow Finder" python3 /workspace/foreman/foreman/v11.py chat "<message>"` and reply with what it prints:
+  - `note @name ...` saves a note
+  - `show me everything from @name` shows the per-person timeline and notes
+  - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
+  - `never show @name` and `show @name again` (Never show tab with undo when hosted. Returning soon lists people back from the 60-day rest)

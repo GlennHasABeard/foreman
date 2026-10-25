@@ -217,6 +217,7 @@ class Spend:
         self.cap = cap
         self.posts = 0
         self.users = 0
+        self.lookups = 0  # direct /users lookups (verify mode), always the user rate
         self.requests = 0
         self.crew_cap = None  # set when the crew's daily cap stopped a read
 
@@ -224,7 +225,8 @@ class Spend:
         """Priced from the crew's one table (x_prices.py), the same one the spend ledger uses."""
         p = self.posts if posts is None else posts
         u = self.users if users is None else users
-        return P().estimate(post=p, attached_user=u)
+        d = self.lookups if users is None else 0
+        return P().estimate(post=p, attached_user=max(u - d, 0), user=d)
 
     # older names, kept so callers and saved runs read the same number
     low = high = cost
@@ -732,6 +734,7 @@ def verify(p, cfg, client, fw, fw_store, now, src):
         for u in body.get("data", []) or []:
             users[u["id"]] = u
         spend.users += len(chunk)
+        spend.lookups += len(chunk)
         found = {u["username"].lower() for u in body.get("data", []) or []}
         missing += [n for n in chunk if n.lower() not in found]
     posts = []

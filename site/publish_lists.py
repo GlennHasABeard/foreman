@@ -79,10 +79,38 @@ async function checks(request, env, url) {
     let obj;
     try { obj = JSON.parse(body); } catch (e) { return out('{"error":"bad json"}', 400); }
     if (!obj || typeof obj !== "object" || Array.isArray(obj)) return out('{"error":"bad json"}', 400);
+    if (page.startsWith("marks-")) {
+      // v1.1 page marks: merge with what is saved, newest mark wins per person,
+      // so two devices saving at once never drop each other's marks
+      let cur = null;
+      try { cur = JSON.parse((await env.CHECKS.get(key)) || "null"); } catch (e) { cur = null; }
+      obj = mergeMarks(cur, obj);
+    }
     await env.CHECKS.put(key, JSON.stringify(obj), { expirationTtl: 60 * 60 * 24 * 180 });
-    return out('{"ok":true}');
+    return out(page.startsWith("marks-") ? JSON.stringify(obj) : '{"ok":true}');
   }
   return out('{"error":"method"}', 405);
+}
+
+function mergeMarks(a, b) {
+  const o = {};
+  a = a && typeof a === "object" ? a : {};
+  b = b && typeof b === "object" ? b : {};
+  for (const k of ["never", "done", "stages", "follow_ups"]) {
+    o[k] = Object.assign({}, a[k] || {});
+    for (const [h, e] of Object.entries(b[k] || {})) {
+      const c = o[k][h];
+      if (!c || String((e && e.ts) || "") >= String((c && c.ts) || "")) o[k][h] = e;
+    }
+  }
+  o.notes = {};
+  for (const src of [a.notes || {}, b.notes || {}]) {
+    for (const [h, ns] of Object.entries(src)) {
+      const have = o.notes[h] || (o.notes[h] = []);
+      for (const n of Array.isArray(ns) ? ns : []) if (!have.some(x => x.ts === n.ts)) have.push(n);
+    }
+  }
+  return o;
 }
 """
 
@@ -114,31 +142,34 @@ THEME_CSS = """
 :root,:root *{--bg:#ffffff!important;--card:#ffffff!important;--chip:#f2f2f2!important;--ink:#000000!important;
 --body:#000000!important;--mute:#555555!important;--line:#cccccc!important;--acc:#000000!important;--acc-fill:#000000!important;
 --on-acc:#ffffff!important;--good:#000000!important;--draft:#f7f7f7!important}
-html,body{background:#ffffff!important;color:#000000!important;
+@media (prefers-color-scheme:dark){:root,:root *{--bg:#121212!important;--card:#1b1b1b!important;--chip:#262626!important;
+--ink:#f1f1f1!important;--body:#f1f1f1!important;--mute:#a3a7ad!important;--line:#3a3a3a!important;--acc:#f1f1f1!important;
+--acc-fill:#f1f1f1!important;--on-acc:#121212!important;--good:#f1f1f1!important;--draft:#1f1f1f!important}}
+html,body{background:var(--bg)!important;color:var(--ink)!important;
 font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif!important}
 *{font-family:inherit!important;box-shadow:none!important;text-shadow:none!important}
-h1{color:#000000!important;font-weight:700!important;background:none!important;animation:none!important}
-a{color:#000000!important}
-.card,.row,.st,a.card,.lmenu,.draft{background:#ffffff!important;border:1px solid #cccccc!important;border-radius:6px!important}
-a.card:hover,.lmenu a:hover{background:#f2f2f2!important}
-.sub,.note,.m,.nm,.age span,.why,.count{color:#555555!important}
-.c{background:#f2f2f2!important;color:#000000!important;border:1px solid #cccccc!important}
-.tog,.seg button,input[type=search],.nv,.lnav button,.row button,.tabs button{background:#ffffff!important;color:#000000!important;
-border:1px solid #cccccc!important;border-radius:6px!important}
-.seg button.on,.nv.arm{background:#000000!important;color:#ffffff!important;border-color:#000000!important}
-.tabs button.on{border-bottom:2px solid #000000!important}
-input[type=checkbox]{accent-color:#000000!important;filter:grayscale(1)}
+h1{color:var(--ink)!important;font-weight:700!important;background:none!important;animation:none!important}
+a{color:var(--ink)!important}
+.card,.row,.st,a.card,.lmenu,.draft{background:var(--card)!important;border:1px solid var(--line)!important;border-radius:6px!important}
+a.card:hover,.lmenu a:hover{background:var(--chip)!important}
+.sub,.note,.m,.nm,.age span,.why,.count{color:var(--mute)!important}
+.c{background:var(--chip)!important;color:var(--ink)!important;border:1px solid var(--line)!important}
+.tog,.seg button,input[type=search],.nv,.lnav button,.row button,.tabs button{background:var(--card)!important;color:var(--ink)!important;
+border:1px solid var(--line)!important;border-radius:6px!important}
+.seg button.on,.nv.arm{background:var(--ink)!important;color:var(--bg)!important;border-color:var(--ink)!important}
+.tabs button.on{border-bottom:2px solid var(--ink)!important}
+input[type=checkbox]{accent-color:var(--ink)!important;filter:grayscale(1)}
 img,svg{filter:grayscale(1)}
-.lnav,header{background:#ffffff!important;border-bottom:1px solid #cccccc!important}
-.nvtoast{background:#000000!important;color:#ffffff!important}
-.nvtoast button{color:#ffffff!important;text-decoration:underline}
+.lnav,header{background:var(--bg)!important;border-bottom:1px solid var(--line)!important}
+.nvtoast{background:var(--ink)!important;color:var(--bg)!important}
+.nvtoast button{color:var(--bg)!important;text-decoration:underline}
 """
 
 THEME_JS = """<script data-lists-theme></script>"""
 
 
 def theme_head():
-    return '<meta name="color-scheme" content="light"><style data-lists-theme>' + THEME_CSS + "</style>"
+    return '<meta name="color-scheme" content="light dark"><style data-lists-theme>' + THEME_CSS + "</style>"
 
 # ----------------------------------------------------------------------------
 # Follow Audit page, built from Follow Audit's saved data. No API calls.
@@ -537,6 +568,103 @@ def v11_pages(w, title_to_name):
         f.write(w.v11.page("Your week", "<pre>" + html.escape(week) + "</pre>", w.v11.now()) + nav_script())
 
 
+def v11_render(w):
+    """v1.1 template pages: each bot page is rebuilt from the DATA its report already embeds,
+    plus its saved v1.1 report and its mark store (chat marks and synced page marks).
+    The bot's original page stays as <page>-full.html. Home replaces the index when 2+ are hosted."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import pages_v11 as P
+    v = w.v11
+    inst = v.installed()
+    mode = v.mode()
+    demo = os.environ.get("LISTS_DEMO") == "1"
+    navitems = ([("Home", "index.html")] if mode in ("home", "crew") else [])
+    navitems += [(t, n) for n, _, t, _ in PAGES if t in inst and os.path.exists(os.path.join(SITE_DIR, n))]
+    if os.path.exists(os.path.join(SITE_DIR, "analytics.html")):
+        navitems.append(("Analytics Log", "analytics.html"))
+    hints = {"Reply Queue": 'Say "mark @name done" in chat.', "Fan Finder": 'Say "never show @name" or "@name is engaged" in chat.',
+             "Follow Finder": 'Say "never show @name" or "show @name again" in chat.',
+             "Shoutout Picker": 'Say "mark @name done" or "mark @name pending" in chat.',
+             "Rerun Picker": "", "Follow Audit": ""}
+    people, built = {}, []
+    for fname, src, title, _ in PAGES:
+        dst = os.path.join(SITE_DIR, fname)
+        if title not in inst or not os.path.exists(dst):
+            continue
+        data = P.extract(dst, "D" if fname == "headcount.html" else "DATA")
+        if data is None:
+            continue
+        full = fname.replace(".html", "-full.html")
+        os.replace(dst, os.path.join(SITE_DIR, full))
+        sv = w.saved(title)
+        store = v.load_store(title)
+        at = w._ts(sv["at"]) if sv else datetime.fromtimestamp(os.path.getmtime(os.path.join(SITE_DIR, full))).astimezone()
+        status = (sv or {}).get("status") or "Ran OK"
+        if title == "Reply Queue":
+            body = P.reply_queue(data, sv)
+        elif title == "Fan Finder":
+            body = P.fan_finder(data, sv, store)
+        elif title == "Follow Finder":
+            body = P.follow_finder(data, sv, True)
+        elif title == "Shoutout Picker":
+            body = P.shoutout_picker(data, sv, bool({"Reply Queue", "Fan Finder"} & set(inst)) or v.is_crew())
+        elif title == "Rerun Picker":
+            terms = w._cfg(title).get("sponsor_terms") or []
+            body = P.rerun_picker(data, sv, lambda t, prev: v.similar_to(t, prev), lambda t: v.sponsor_flag(t, terms))
+        else:
+            tiles = ((sv or {}).get("extra") or {}).get("tiles") or {}
+            body = P.follow_audit(data, sv, tiles if "removed by X" in tiles else None)
+        if sv:
+            body += "<h2>This run</h2>" + P.lines_html(sv["lines"] + [sv["spend"]])
+        body += f'<p class="note"><a href="{full}">Full report</a></p>'
+        with open(dst, "w", encoding="utf-8") as f:
+            f.write(P.shell(title, P.SLUG(title), v.last_updated(at), status, body, P.store_to_marks(store),
+                            navitems, demo, hints.get(title, "")))
+        built.append(fname)
+        rows = data if isinstance(data, list) else (data.get("since") or [])
+        for r in rows:
+            h = (r.get("username") or r.get("u") or "").lower()
+            if h:
+                p = people.setdefault(h, {"bots": [], "ev": []})
+                if title not in p["bots"]:
+                    p["bots"].append(title)
+        for h in list(people):
+            for line in v.timeline(h, title)[1:] if store.get("events") else []:
+                people[h]["ev"].append({"d": "", "b": title, "t": line})
+    if mode in ("home", "crew") and built:
+        panels = []
+        for n in v.home_panels():
+            if n == "Top fans":
+                continue
+            sv = w.saved(n)
+            href = next((f for f, _, t, _ in PAGES if t == n), "analytics.html" if n == "Analytics Log" else "")
+            lines = (sv["lines"][:4] + [sv["spend"]]) if sv else ["No run yet"]
+            if n == "Bot health":
+                lines = w.health()
+            elif n == "Cost digest":
+                dg = w.digest()
+                lines = [dg] if isinstance(dg, str) else (dg or [])
+            panels.append(("p-" + P.SLUG(n), n, href, P.lines_html(lines)))
+        top = None
+        if v.top_fans_visible():
+            regs = ((w.saved("Reply Queue") or {}).get("extra") or {}).get("regulars") or {}
+            top = [(h, f"{c} conversations") for h, c in list(regs.items())[:5]]
+        marks = {"never": {}, "done": {}, "stages": {}, "notes": {}, "follow_ups": {}}
+        for n in inst:
+            m = P.store_to_marks(v.load_store(n))
+            for k in marks:
+                marks[k].update(m[k])
+        due = sum(1 for f in marks["follow_ups"].values() if f.get("on") and (f.get("due") or "") <= datetime.now().strftime("%Y-%m-%d"))
+        strip = [("bots hosted", len(inst)), ("follow-ups due", due)]
+        ok = [n for n in inst if (w.saved(n) or {}).get("status", "").startswith("Ran OK")]
+        status = f"{len(ok)} of {len(inst)} bots ran OK on their last run."
+        with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
+            f.write(P.shell("Home", "home", v.last_updated(v.now()), status, P.home(panels, people, top, strip),
+                            marks, navitems, demo, 'Say "follow up @name on YYYY-MM-DD" in chat.'))
+        built.append("index.html")
+    return built
+
+
 # ----------------------------------------------------------------------------
 
 def publish_log(result):
@@ -589,6 +717,13 @@ def main():
     with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(INDEX.replace("__THEME__", theme_head()).replace("__NOW__", now)
                 .replace("__CARDS__", "\n".join(cards)))
+    if w:
+        try:
+            built = w and v11_render(w)
+            if built:
+                print(f"v1.1 pages: {', '.join(built)}")
+        except Exception as e:  # never let v1.1 pages block the lists
+            print(f"v1.1 pages skipped: {e}", file=sys.stderr)
     if w and mode == "own_page":
         # one hosted bot: its own page is home, follow-ups and status show there
         only = [n for n, _, t, _ in PAGES if t in w.v11.installed()]

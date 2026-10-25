@@ -503,6 +503,48 @@ def copy_page(src, dst):
 
 
 # ----------------------------------------------------------------------------
+# v1.1: panels, Home, one-bot own page, Your week, Dispatch health (foreman/v11_wire.py)
+# ----------------------------------------------------------------------------
+
+def v11_wire():
+    for d in (os.environ.get("FOREMAN_DIR", ""), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "foreman"),
+              "/workspace/foreman/foreman"):
+        if d and os.path.isfile(os.path.join(d, "v11_wire.py")):
+            if d not in sys.path:
+                sys.path.insert(0, d)
+            try:
+                import v11_wire as w
+                return w
+            except Exception as e:
+                print(f"v1.1 extras skipped: {e}", file=sys.stderr)
+    return None
+
+
+def v11_pages(w, title_to_name):
+    """Refresh each copied page's v1.1 panel from the bot's saved report, and write the
+    pages Follow Audit and Analytics Log need (analytics.html, week.html)."""
+    for name, dst in title_to_name:
+        s = w.saved(name)
+        if s and os.path.exists(dst):
+            w.inject(dst, w._html_block(name, s["lines"] + [s["spend"]], s.get("extra") or {}, s["status"]))
+    s = w.saved("Analytics Log")
+    if s and "Analytics Log" in w.v11.installed():
+        body = "<ul>" + "".join(f"<li>{html.escape(x)}</li>" for x in s["lines"] + [s["spend"]]) + "</ul>"
+        with open(os.path.join(SITE_DIR, "analytics.html"), "w", encoding="utf-8") as f:
+            f.write(w.v11.page("Analytics Log", body, w._ts(s["at"]), s["status"]) + nav_script())
+    week = w.week_text()
+    with open(os.path.join(SITE_DIR, "week.html"), "w", encoding="utf-8") as f:
+        f.write(w.v11.page("Your week", "<pre>" + html.escape(week) + "</pre>", w.v11.now()) + nav_script())
+
+
+# ----------------------------------------------------------------------------
+
+def publish_log(result):
+    """One line per deploy so a failed publish is visible later (chat falls back to the full list)."""
+    p = os.path.join(BOTS_HOME, "site", "publish_log.jsonl")
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "result": result}) + "\n")
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -528,10 +570,31 @@ def main():
         else:
             cards.append(f'<div class="card off"><div><div class="t">{html.escape(title)}</div>'
                          f'<div class="m">No list yet</div></div></div>')
+    w = v11_wire()
+    mode = "home"
+    if w:
+        names = {t: n for n, _, t, _ in PAGES}
+        try:
+            v11_pages(w, [(t, os.path.join(SITE_DIR, n)) for t, n in names.items()])
+            mode = w.v11.mode()
+            panels = w.home_html(cards)
+            if panels:
+                cards = [panels] + cards
+            if os.path.exists(os.path.join(SITE_DIR, "analytics.html")):
+                cards.append('<a class="card" href="analytics.html"><div><div class="t">Analytics Log</div></div></a>')
+            cards.append('<a class="card" href="week.html"><div><div class="t">Your week</div></div></a>')
+        except Exception as e:  # never let v1.1 extras block the lists
+            print(f"v1.1 extras skipped: {e}", file=sys.stderr)
     now = datetime.now().strftime("%a %b %d, %I:%M %p")
     with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(INDEX.replace("__THEME__", theme_head()).replace("__NOW__", now)
                 .replace("__CARDS__", "\n".join(cards)))
+    if w and mode == "own_page":
+        # one hosted bot: its own page is home, follow-ups and status show there
+        only = [n for n, _, t, _ in PAGES if t in w.v11.installed()]
+        if only and os.path.exists(os.path.join(SITE_DIR, only[0])):
+            with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
+                f.write(f'<!doctype html><meta http-equiv="refresh" content="0;url={only[0]}">')
     # with a custom domain, send every pages.dev address to it, so the lists only
     # ever load behind Cloudflare Access. With pages.dev, protect *.pages.dev in Access.
     with open(os.path.join(SITE_DIR, "_worker.js"), "w", encoding="utf-8") as f:
@@ -551,7 +614,9 @@ def main():
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write(r.stdout[-2000:] + r.stderr[-2000:])
+        publish_log("failed")
         raise SystemExit("Deploy failed. The pages are still in the site folder.")
+    publish_log("ok")
     print(f"Published. Index: {BASE_URL}/")
     for name in copied:
         print(f"  {BASE_URL}/{name}")

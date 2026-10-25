@@ -653,6 +653,10 @@ def run(mode, p, cfg, client, fw, fw_store, now):
         print(f"{client.who}: {msg}")
 
     kept, dropped = evaluate(all_users, all_posts, cfg, fw, fw_cfg, today, following, followers, seen, my_id)
+    w = _v11_wire()
+    if w:  # "never show @name" and 60-day rests from chat (or synced KV) marks
+        os.environ["CREW_BOT"] = "Follow Finder"
+        kept = [c for c in kept if w.v11.visible(c.get("username") or "", name="Follow Finder")]
     shortlist = kept[:cfg["shortlist_size"]]
     for c in shortlist:
         seen[c["id"]] = {"username": c["username"], "shown": today.isoformat()}
@@ -864,5 +868,36 @@ def main(argv=None):
         run(args.command, p, cfg, client, fw, fw_store, now)
 
 
+def _v11_wire():
+    """v1.1 extras (foreman/v11_wire.py). Missing module means a v1.0 install: skip quietly."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.environ.get("FOREMAN_DIR", ""), os.path.join(here, "..", "foreman"),
+              os.path.join(here, "foreman"), "/workspace/foreman/foreman"):
+        if d and os.path.isfile(os.path.join(d, "v11_wire.py")):
+            if d not in sys.path:
+                sys.path.insert(0, d)
+            try:
+                import v11_wire
+                return v11_wire
+            except Exception:
+                return None
+    return None
+
+
+def _v11_after(argv):
+    runs = {c: ("Follow Finder", os.path.join(BOTS_HOME, "creator-scout", "reports", "creator_scout.html")) for c in ("trial", "run", "verify")}
+    cmd = next((x for x in argv if not x.startswith("-")), "")
+    if cmd not in runs:
+        return
+    w = _v11_wire()
+    if w:
+        name, page = runs[cmd]
+        try:
+            print("\n".join(w.after_run(name, page=page)))
+        except Exception as e:
+            print(f"v1.1 extras skipped: {e}")
+
+
 if __name__ == "__main__":
     main()
+    _v11_after(sys.argv[1:])

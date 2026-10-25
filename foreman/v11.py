@@ -31,7 +31,7 @@ UTC = timezone.utc
 
 
 def home():
-    return os.environ.get("BOTS_HOME", "/workspace/bots")
+    return os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
 
 def bot():

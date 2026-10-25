@@ -670,6 +670,8 @@ def cmd_radar(st, fw, fw_store):
             hidden["you already liked"] = hidden.get("you already liked", 0) + 1
             continue
         u = users.get(e["author"]) or {}
+        if v11w and not v11w.v11.visible(u.get("username") or "", name="Fan Finder"):
+            continue
         if (u.get("username") or "").lower() in skip:
             hidden["from skipped accounts"] = hidden.get("from skipped accounts", 0) + 1
             continue
@@ -792,6 +794,7 @@ def cmd_leads(st, fw, fw_store):
             a["links"].append(eid)
 
     leads, dropped = [], {}
+    v11w = _v11_wire()
     skip = {h.lower().lstrip("@") for h in cfg.get("skip_handles", ["grok"])}
     for uid, a in agg.items():
         u = users.get(uid)
@@ -962,5 +965,36 @@ def main(argv=None):
         cmd_leads(st, fw, fw_store)
 
 
+def _v11_wire():
+    """v1.1 extras (foreman/v11_wire.py). Missing module means a v1.0 install: skip quietly."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.environ.get("FOREMAN_DIR", ""), os.path.join(here, "..", "foreman"),
+              os.path.join(here, "foreman"), "/workspace/foreman/foreman"):
+        if d and os.path.isfile(os.path.join(d, "v11_wire.py")):
+            if d not in sys.path:
+                sys.path.insert(0, d)
+            try:
+                import v11_wire
+                return v11_wire
+            except Exception:
+                return None
+    return None
+
+
+def _v11_after(argv):
+    runs = {"radar": ("Reply Queue", os.path.join(BOTS_HOME, "engagement", "reports", "mention_radar.html")), "leads": ("Fan Finder", os.path.join(BOTS_HOME, "engagement", "reports", "warm_leads.html"))}
+    cmd = next((x for x in argv if not x.startswith("-")), "")
+    if cmd not in runs:
+        return
+    w = _v11_wire()
+    if w:
+        name, page = runs[cmd]
+        try:
+            print("\n".join(w.after_run(name, page=page)))
+        except Exception as e:
+            print(f"v1.1 extras skipped: {e}")
+
+
 if __name__ == "__main__":
     main()
+    _v11_after(sys.argv[1:])

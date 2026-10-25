@@ -57,7 +57,7 @@ def _load(path, default):
 
 def _save(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
+    tmp = path + ".%d.tmp" % os.getpid()
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=1)
     os.replace(tmp, path)
@@ -171,18 +171,22 @@ def handle(text, name=None, post_times=None):
         if kind == "never":
             s["never"][h] = t
             s["hide_until"].pop(h, None)
+            s.setdefault("tombstones", {}).pop("never:" + h, None)
             msg = f"@{h} will never show again. Say \"show @{h} again\" to undo."
         elif kind == "show_again":
             was = s["never"].pop(h, None) or s["hide_until"].pop(h, None)
+            s.setdefault("tombstones", {})["never:" + h] = t
             msg = f"@{h} will show again." if was else f"@{h} was not hidden."
         elif kind == "stage":
             s["stages"][h] = {"stage": m.group(2).lower(), "ts": t}
             msg = f"@{h} is now {m.group(2).lower()}."
         elif kind == "done":
             s["done"][h] = t
+            s.setdefault("tombstones", {}).pop("done:" + h, None)
             msg = f"Marked @{h} done."
         elif kind == "pending":
             s["done"].pop(h, None)
+            s.setdefault("tombstones", {})["done:" + h] = t
             msg = f"@{h} is pending again."
         elif kind == "note":
             s["notes"].setdefault(h, []).append({"ts": t, "text": m.group(2).strip()})
@@ -201,14 +205,72 @@ def handle(text, name=None, post_times=None):
     return None
 
 
+def _when(ts):
+    """Parse a mark time from chat (aware ISO), the page (ISO with Z) or older files (naive = UTC)."""
+    if not isinstance(ts, str) or not ts:
+        return datetime.min.replace(tzinfo=UTC)
+    try:
+        d = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.min.replace(tzinfo=UTC)
+    return d if d.tzinfo else d.replace(tzinfo=UTC)
+
+
 def merge_kv(kv, name=None):
-    """Fold hosted KV marks ({"never":{}, "done":{}, "stages":{}, "notes":{}}) into the file store."""
+    """Fold hosted page marks into the bot's file store. Newest mark wins per person and kind,
+    so two devices (or a device and a chat command) never undo each other by accident.
+
+    Page format: {"never"|"done": {h: {"on": bool, "ts": iso}}, "stages": {h: {"stage", "ts"}},
+                  "notes": {h: [{"ts", "text"}]}, "follow_ups": {h: {"on", "due", "ts", "text"}}}
+    The older flat format ({"never": {h: ts}}) is still read."""
+    kv = kv or {}
     s = load_store(name)
-    for k in ("never", "done", "stages", "hide_until"):
-        s[k].update((kv or {}).get(k) or {})
-    for h, ns in ((kv or {}).get("notes") or {}).items():
+    tomb = s.setdefault("tombstones", {})
+    for kind in ("never", "done"):
+        for h, e in (kv.get(kind) or {}).items():
+            h = _h(h)
+            if not isinstance(e, dict):
+                e = {"on": True, "ts": e if isinstance(e, str) else ""}
+            ts = e.get("ts") or ""
+            mine = max(_when(s[kind].get(h)), _when(tomb.get(f"{kind}:{h}")))
+            if _when(ts) <= mine and (s[kind].get(h) or tomb.get(f"{kind}:{h}")):
+                continue
+            if e.get("on", True):
+                s[kind][h] = ts or now().isoformat(timespec="seconds")
+                tomb.pop(f"{kind}:{h}", None)
+                if kind == "never":
+                    s["hide_until"].pop(h, None)
+            else:
+                s[kind].pop(h, None)
+                tomb[f"{kind}:{h}"] = ts
+                if kind == "never":
+                    s["hide_until"].pop(h, None)
+    for h, e in (kv.get("hide_until") or {}).items():
+        s["hide_until"].setdefault(_h(h), e)
+    for h, e in (kv.get("stages") or {}).items():
+        h = _h(h)
+        e = e if isinstance(e, dict) else {"stage": e, "ts": ""}
+        cur = s["stages"].get(h)
+        if e.get("stage") in STAGES and (not cur or _when(e.get("ts")) > _when((cur or {}).get("ts"))):
+            s["stages"][h] = {"stage": e["stage"], "ts": e.get("ts") or ""}
+    for h, ns in (kv.get("notes") or {}).items():
+        h = _h(h)
         have = {n["ts"] for n in s["notes"].get(h, [])}
-        s["notes"].setdefault(h, []).extend(n for n in ns if n["ts"] not in have)
+        s["notes"].setdefault(h, []).extend(n for n in ns if isinstance(n, dict) and n.get("ts") not in have)
+    for h, e in (kv.get("follow_ups") or {}).items():
+        h = _h(h)
+        if not isinstance(e, dict):
+            continue
+        ns = s["notes"].setdefault(h, [])
+        latest = max([_when(n["ts"]) for n in ns if n.get("due")] + [_when(tomb.get(f"follow_ups:{h}"))])
+        if _when(e.get("ts")) <= latest:
+            continue
+        s["notes"][h] = [n for n in ns if not n.get("due")]
+        if e.get("on"):
+            s["notes"][h].append({"ts": e.get("ts"), "text": e.get("text") or "follow up", "due": e.get("due")})
+            tomb.pop(f"follow_ups:{h}", None)
+        else:
+            tomb[f"follow_ups:{h}"] = e.get("ts")
     save_store(s, name)
     return s
 

@@ -68,7 +68,7 @@ def load_state():
 
 def save_state(s):
     os.makedirs(UPDATE_DIR, exist_ok=True)
-    tmp = state_path() + ".tmp"
+    tmp = state_path() + ".%d.tmp" % os.getpid()
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(s, f, indent=2)
     os.replace(tmp, state_path())

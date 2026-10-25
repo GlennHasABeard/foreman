@@ -76,7 +76,7 @@ def load_ledger():
 
 def save_ledger(led):
     os.makedirs(os.path.dirname(LEDGER), exist_ok=True)
-    tmp = LEDGER + ".tmp"
+    tmp = LEDGER + ".%d.tmp" % os.getpid()
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(led, f, indent=2, sort_keys=True)
     os.replace(tmp, LEDGER)

@@ -282,6 +282,91 @@ def inject(page, block):
     return True
 
 
+# ---------- v1.1: page marks from KV before each run ----------
+
+def _site_env():
+    env = {}
+    path = os.path.join(v11.home(), "site", "site.env")
+    try:
+        for line in open(path, encoding="utf-8"):
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                env[k.strip().removeprefix("export ").strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def _kv_get(keys, fetch=None):
+    """Read checks:<key> values from the CHECKS namespace (same API calls as the live Scout sync).
+    Returns {key: parsed json}; missing keys are left out. `fetch(path)` is swappable for tests."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    env = {**_site_env(), **os.environ}
+    tok, acc = env.get("CLOUDFLARE_API_TOKEN"), env.get("CLOUDFLARE_ACCOUNT_ID")
+    if fetch is None:
+        if not tok or not acc:
+            raise RuntimeError("no Cloudflare token in site.env")
+        base = env.get("CF_API_BASE", "https://api.cloudflare.com/client/v4")
+
+        def fetch(path):
+            req = urllib.request.Request(base + "/accounts/" + acc + path, headers={"Authorization": "Bearer " + tok})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read().decode("utf-8")
+    title = env.get("KV_NAMESPACE_TITLE", "bot-lists-checks")
+    nss = json.loads(fetch("/storage/kv/namespaces?per_page=100")).get("result", [])
+    nid = next((n["id"] for n in nss if n.get("title") == title), None)
+    if not nid:
+        raise RuntimeError(f"KV namespace {title} not found")
+    out = {}
+    for k in keys:
+        try:
+            out[k] = json.loads(fetch(f"/storage/kv/namespaces/{nid}/values/" + urllib.parse.quote("checks:" + k, safe="")))
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise RuntimeError("the API token needs Workers KV Storage Read") from e
+            # 404: nothing saved from the page yet
+        except ValueError:
+            pass
+    return out
+
+
+def before_run(name, fetch=None):
+    """Call at the start of a run. Hosted only: pull this bot's page marks (never show, show again,
+    stages, done, notes, follow-ups) from KV and merge them into its store, newest mark winning.
+    Never raises and never blocks a run. Returns a one-line status or ''."""
+    if fetch is None and not v11.hosted():
+        return ""
+    os.environ["CREW_BOT"] = name
+    slug = name.lower().replace(" ", "-")
+    keys = ["marks-" + slug] + (["never-scout", "never-scout-undo"] if name == "Follow Finder" else [])
+    try:
+        got = _kv_get(keys, fetch)
+    except Exception as e:
+        return f"Page marks not synced ({e}). The run goes on with marks saved here."
+    kv = dict(got.get("marks-" + slug) or {})
+    # the live Scout lists: never-scout {h: ts}, never-scout-undo {h: ts}
+    legacy = got.get("never-scout") or {}
+    undo = got.get("never-scout-undo") or {}
+    if isinstance(legacy, list):
+        legacy = {h: "" for h in legacy}
+    nv = kv.setdefault("never", {})
+    for h, ts in legacy.items():
+        e = {"on": True, "ts": ts if isinstance(ts, str) else ""}
+        if v11._when(e["ts"]) >= v11._when((nv.get(h) or {}).get("ts")):
+            nv[h] = e
+    for h, ts in (undo.items() if isinstance(undo, dict) else []):
+        e = {"on": False, "ts": ts if isinstance(ts, str) else ""}
+        if v11._when(e["ts"]) > v11._when((nv.get(h) or {}).get("ts")):
+            nv[h] = e
+    if not any(kv.get(k) for k in ("never", "done", "stages", "notes", "follow_ups", "hide_until")):
+        return ""
+    v11.merge_kv(kv, name)
+    n = sum(len(kv.get(k) or {}) for k in ("never", "done", "stages", "notes", "follow_ups"))
+    return f"Synced {n} page mark{'s' if n != 1 else ''} from your page."
+
+
 def after_run(name, page=None, estimate=None, billed=None, status="Ran OK", reads=()):
     """Call at the end of a run. Never raises: v1.1 extras must not break a run."""
     os.environ["CREW_BOT"] = name

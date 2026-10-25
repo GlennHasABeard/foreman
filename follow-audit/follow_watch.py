@@ -185,7 +185,7 @@ EVENT_FIELDS = ["ts", "date", "event", "id", "username", "name", "days", "days_m
 
 
 def write_json(path, obj, private=False):
-    tmp = path + ".tmp"
+    tmp = path + ".%d.tmp" % os.getpid()
     if private:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -1789,6 +1789,22 @@ def _v11_wire():
     return None
 
 
+def _v11_before(argv):
+    """v1.1: pull this bot's page marks from KV (hosted) into its own files before the run."""
+    runs = {c: ("Follow Audit", None) for c in ("full", "light", "daily", "recheck", "report")}
+    cmd = next((x for x in argv if not x.startswith("-")), "")
+    if cmd not in runs:
+        return
+    w = _v11_wire()
+    if w:
+        try:
+            msg = w.before_run(runs[cmd][0])
+            if msg:
+                print(msg)
+        except Exception as e:  # never block a run over the sync
+            print(f"Page marks sync skipped: {e}")
+
+
 def _v11_after(argv):
     runs = {c: ("Follow Audit", None) for c in ("full", "light", "daily", "recheck", "report")}
     cmd = next((x for x in argv if not x.startswith("-")), "")
@@ -1804,5 +1820,6 @@ def _v11_after(argv):
 
 
 if __name__ == "__main__":
+    _v11_before(sys.argv[1:])
     main()
     _v11_after(sys.argv[1:])

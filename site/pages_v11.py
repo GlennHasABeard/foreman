@@ -599,18 +599,43 @@ def _who(u):
     return f'<a class="who" href="https://x.com/{E(u)}" target="_blank" rel="noopener">@{E(u)}</a>'
 
 
-def home_reply_queue(rows, n=5):
-    """rows: Reply Queue DATA rows still waiting (done already removed). Top n, mentions first."""
+def home_reply_queue(rows, n=5, marks=None):
+    """rows: Reply Queue DATA rows still waiting (done already removed). Top n, mentions first.
+    Mark done writes the Reply Queue page marks: localStorage v11-marks-reply-queue and,
+    when hosted, KV /api/checks?page=marks-reply-queue. Same toast and undo as that page."""
     rows = sorted(rows, key=lambda x: (((x.get("chips") or [{}])[0].get("t") or "").lower() != "mention"))[:n]
     if not rows:
         return '<p class="note">Nothing waiting. Nice.</p>'
-    return "".join(
-        f'<div class="item">{_who(x.get("username", ""))} <span class="nm">{E(((x.get("chips") or [{}])[0].get("t") or "reply").lower())}'
-        f'{" · " + E(x["chips"][1]["t"]) if len(x.get("chips") or []) > 1 else ""}</span>'
-        f'<div class="txt">{RAW(snippet(x.get("text", ""), 14))}</div><div class="btns">'
-        f'<a class="btn pri" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id={E(x.get("key", ""))}">Like</a>'
-        f'<a class="btn" target="_blank" rel="noopener" href="{RAW(((x.get("links") or [{}])[0]).get("u", ""))}">Open</a></div></div>'
-        for x in rows)
+    if not isinstance(marks, dict):
+        marks = {"never": {}, "done": {}, "stages": {}, "notes": {}, "follow_ups": {}}
+    parts = []
+    for x in rows:
+        chips = x.get("chips") or []
+        kind = ((chips[0].get("t") if chips else None) or "reply").lower()
+        extra = chips[1]["t"] if len(chips) > 1 else ""
+        u = x.get("username", "")
+        parts.append(
+            f'<div class="item">{_who(u)} <span class="nm">{E(kind)}'
+            f'{" · " + E(extra) if extra else ""}</span>'
+            f'<div class="txt">{RAW(snippet(x.get("text", ""), 14))}</div><div class="btns">'
+            f'<a class="btn pri" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id={E(x.get("key", ""))}">Like</a>'
+            f'<a class="btn" target="_blank" rel="noopener" href="{RAW(((x.get("links") or [{}])[0]).get("u", ""))}">Open</a>'
+            f'<button type="button" data-hrq="{E(u)}">Mark done</button></div></div>')
+    return ('<div id="hrq-list">' + "".join(parts) + "</div>"
+            + data_script("hrq-marks", marks) + "<script>" + r"""
+(function(){var V=window.V11,LK="v11-marks-reply-queue",
+API="/api/checks?page=marks-reply-queue",M={never:{},done:{},stages:{},notes:{},follow_ups:{}};
+V.merge(M,JSON.parse(document.getElementById("hrq-marks").textContent));try{V.merge(M,JSON.parse(localStorage.getItem(LK)||"null"))}catch(e){}
+function on(h){var e=M.done[(h||"").replace(/^@/,"").toLowerCase()];return !!(e&&e.on)}
+function paint(){document.querySelectorAll("#hrq-list [data-hrq]").forEach(function(b){var o=on(b.getAttribute("data-hrq"));
+ b.textContent=o?"Done ✓":"Mark done";var row=b.closest(".item");if(row)row.classList.toggle("done",o)})}
+function save(){try{localStorage.setItem(LK,JSON.stringify(M))}catch(e){}
+ if(V.hosted&&!V.preview)fetch(API,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(M)})
+  .then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(s){if(s&&typeof s==="object"){V.merge(M,s);try{localStorage.setItem(LK,JSON.stringify(M))}catch(e){}paint()}}).catch(function(){V.offline()})}
+if(V.hosted&&!V.preview)fetch(API,{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(s){if(s&&typeof s==="object"){V.merge(M,s);try{localStorage.setItem(LK,JSON.stringify(M))}catch(e){}paint()}}).catch(function(){});
+document.getElementById("hrq-list").addEventListener("click",function(e){var b=e.target.closest("[data-hrq]");if(!b)return;var h=b.getAttribute("data-hrq"),key=h.replace(/^@/,"").toLowerCase(),was=on(h);
+ M.done[key]={on:!was,ts:new Date().toISOString()};save();paint();if(!was)V.toast("Marked @"+h.replace(/^@/,"")+" done.",function(){M.done[key]={on:false,ts:new Date().toISOString()};save();paint()})});
+V.renderers.push(paint);paint();})();</script>""")
 
 
 def home_fan_finder(rows, n=3):

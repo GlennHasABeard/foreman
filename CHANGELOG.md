@@ -2,6 +2,21 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
+## v1.1.2 (2026-10-31)
+Published 2026-10-31. Each template's release notes list only its own section plus "All individual templates".
+
+### All individual templates
+- Install pins point at v1.1.2.
+
+### Reply Queue
+- **Home:** each Reply Queue panel item shows Like, Open and Mark done. Mark done becomes Done ✓ and uses the same done marks as the Reply Queue page (this browser, and KV when hosted), with the same undo toast.
+
+### Follow Finder
+- **Daily Pack:** notes on rules that can only be partly checked (for example "Only catches bios and posts that say so") stay on Rules learned. Pack cards no longer show them. Legendary still uses the Hidden gem why line.
+
+### Foreman crew (Dispatch)
+- Home Reply Queue items include Mark done, same marks as the Reply Queue page.
+
 ## v1.1.1 (2026-10-31)
 Published 2026-10-31. Each template's release notes list only its own section plus "All individual templates".
 

@@ -47,7 +47,7 @@ Daily order (after the normal run):
 What it does:
 - Daily Pack of 5 from Follow Finder's picks, shown with X's official embed widget, matched to the page's light or dark theme and lazy loaded.
 - Blind Taste Test: the creator is hidden ("Hidden creator") until the owner picks Keep or Pass, then the real embed is revealed. Before reveal a solid cover hides the name row and footer and taps are blocked.
-- Not like this: chips or the owner's own words become a never-scout or filter rule. Rules learned lists them with Undo.
+- Not like this: chips or the owner's own words become a never-scout or filter rule. Rules learned lists them with Undo. A note on a rule that can only be partly checked stays on Rules learned. Daily Pack cards do not show that note.
 - Score: replies 3, follows 1, keeper at 30 days 5. Follows count only when Follow Audit's nightly list confirms them, capped at 5 follows a day. Follow-backs earn nothing.
 - NSFW filter, always on and not a setting: words, adult links, X's possibly_sensitive flag and the bot's own vision verdicts. Unrated picks stay blurred behind Tap to show.
 - Rarity is relative to today's Follow Finder pool: Legendary is the top 3% by the Hidden gem stand-in score, Rare the next 15%, everything else Common. Each pack has at least 1 Rare when the pool has one. The Legendary why line says Hidden gem (in your niche, you don't follow them, nobody you follow is tagged in their bio) and never claims audience overlap.

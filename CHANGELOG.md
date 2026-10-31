@@ -2,6 +2,44 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
+## v1.1.1 (2026-10-31)
+Published 2026-10-31. Each template's release notes list only its own section plus "All individual templates".
+
+### All individual templates
+- **Embeds:** pages use only X's official embed widget (`platform.twitter.com/widgets.js`). No unofficial embed data is read anywhere.
+- **Spend:** today's spend and the weekly spend tile say "X billing days, UTC", since X bills by UTC day.
+
+### Follow Finder
+- **Game tab, off by default.** Say "turn on Game" to add it. Daily Pack of 5 with at least 1 Rare when the pool has one, and Legendary as the Hidden gem pick. Not like this chips or your own words become rules, Rules learned has Undo. Blind Taste Test, binder, streak and level. The score counts a follow only when Follow Audit confirms it. No X API calls.
+- **Blind Taste Test:** a solid cover over the name row and footer, taps blocked until you reveal.
+- **Filters:** picks are matched by X user ID, and every filter runs again after every swap. Hard NSFW filter always on, plus X's own `possibly_sensitive` flag. Already following button and chat command.
+- **Optional image check, off by default.** Images in the Game stay blurred unless you turn it on (`game_image_check`). It reads the pack's images through X media expansions, shows its cost before it runs and only runs after you say yes.
+- **Chat:** `not like @name because ...`, `undo rule ...` and `already following @name`.
+
+### Shoutout Picker
+- **Weekly goal:** say `shoutout goal N`. Your week counts shoutouts from your own posts against the goal, with picks you have not used yet listed at the bottom.
+
+### Reply Queue
+- **Reply button and draft box removed** (Reply failed on Android). Like, Open and Done stay.
+- **Embeds:** compact, load as you scroll, with Show context for the post you replied to.
+- **Sensitive posts** stay behind Tap to show.
+- Saves `in_reply_to_user_id`. The window stays 72 hours.
+
+### Rerun Picker
+- **Skips:** personal updates, partner or #ad posts, posts tagging a partner, shoutout posts, posts under 5 words and time-bound posts ("ends today", "tonight"). Time words inside quotes are ignored. The word lists are in `config.json`.
+- **Partners:** setup asks for the brands or partners you post for. The list ships empty.
+- **Drafts:** the bot watches the video first and writes the angle and draft from it.
+- Reruns used reads the newest picks file.
+
+### Analytics Log
+- **500K leave-window card:** the next 7 days that leave the verified-impressions tracker, when each drops off and how much it takes. Monetized accounts only.
+- **Payout and video lists** are copied on a night pull only when X's list changed.
+- **Your week:** replies handled split into replied, liked and Done. Shoutouts against your weekly goal, unused picks at the bottom. Reruns used from the newest picks file.
+
+### Foreman crew (Dispatch)
+- Everything above for the crew's bots. Dispatch knows the Game chat commands and `shoutout goal N`.
+- Home: "handled this week" tile (replied, liked, Done) and the UTC billing note under today's spend.
+
 ## v1.1.0 (2026-10-25)
 Published 2026-10-25. Each template's release notes list only its own section plus "All individual templates".
 

@@ -30,6 +30,7 @@ import argparse
 import csv
 import html
 import json
+import re
 import os
 import statistics
 import sys
@@ -74,6 +75,17 @@ DEFAULT_CONFIG = {
     "media_only": None,
     "skip_media_types": None,
     "skip_terms": None,
+    # Rerun skips (v1.1.1). Generic word lists, edit freely. brand_handles ships EMPTY: setup asks for your partners.
+    "brand_handles": [],
+    "personal_terms": ["my dog", "my cat", "our dog", "our cat", "puppy", "kitten", "pet ", "vet", "antibiotic", "surgery",
+                       "hospital", "doctor", "sick", "illness", "diagnos", "recovery", "my wife", "my husband", "my son",
+                       "my daughter", "my kids", "my mom", "my dad", "my mother", "my father", "family", "funeral",
+                       "passed away", "rip "],
+    "brand_terms": ["thanks to", "thank you @", "thanks @", "sponsored", "partner", "#ad"],
+    "skip_any_mention": False,
+    "min_words": 5,
+    "time_terms": ["next week", "this week", "today", "tomorrow", "this weekend", "tonight", "giveaway", "live now",
+                   "coming soon", "ends today", "ends tonight", "ends soon"],
     "max_cost_per_pull": None,
     "timezone": None,
 }
@@ -315,6 +327,25 @@ def median_for(created, originals, window_days):
     return statistics.median(vals) if len(vals) >= 5 else None
 
 
+def rerun_skip(p, cfg):
+    """Skip personal updates (pets, family, health), partner or #ad posts (brand terms or a tag of one of
+    the user's brand_handles), shoutout posts, time-bound posts (time words inside quotes are ignored)
+    and posts under min_words words once links and hashtags are removed. Returns a reason or None."""
+    raw = p.get("text") or ""; t = " " + raw.lower() + " "
+    if any(x in t for x in cfg.get("personal_terms") or []): return "personal update (pets, family, health)"
+    tags = {h.lower() for h in re.findall(r"(?<!\w)@(\w+)", raw)}
+    if any(x in t for x in cfg.get("brand_terms") or []) or tags & {b.lower().lstrip("@") for b in cfg.get("brand_handles") or []} \
+            or (cfg.get("skip_any_mention") and tags):
+        return "partner, brand tag or #ad"
+    if tags and "shoutout" in t: return "shoutout post"
+    unquoted = re.sub(r'"[^"]*"|\u201c[^\u201d]*\u201d', " ", t)
+    if any(re.search(r"(?<!\w)" + re.escape(x.lower()) + r"(?!\w)", unquoted) for x in cfg.get("time_terms") or []):
+        return "time-bound (dated or event post)"
+    words = re.sub(r"https?://\S+|#\w+", " ", raw).split()
+    if len(words) < (cfg.get("min_words") or 5): return "only a few words"
+    return None
+
+
 def cmd_pick(st):
     cfg = st.cfg
     state = st.state()
@@ -357,6 +388,10 @@ def cmd_pick(st):
         text = (p.get("text") or "").lower()
         if any(t.lower() in text for t in cfg["skip_terms"]):
             drop("sponsor or affiliate post")
+            continue
+        why = rerun_skip(p, cfg)
+        if why:
+            drop(why)
             continue
         lr = last_rerun.get(p["id"])
         if lr and (now - ts(lr)).days < cfg["rerun_cooldown_days"]:

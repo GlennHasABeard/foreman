@@ -12,7 +12,7 @@
   },
   "follow-audit": {"timezone": null, "daily_spend_cap": null, "inactive_days": null, "dormant_days": null, "newest_check_size": 350},
   "follow-finder": {"queries": [], "min_followers": null, "max_followers": null, "verified_only": null,
-                    "adult_filter": true, "exclude_terms": [], "shortlist_size": null, "max_cost_per_run": null, "trial_max_cost": null,
+                    "adult_filter": true, "game_image_check": false, "exclude_terms": [], "shortlist_size": null, "max_cost_per_run": null, "trial_max_cost": null,
                     "language_quota": null, "size_quota": null},
   "shoutout-picker": {"timezone": null, "account_kinds": "", "labels": [], "min_followers": null, "max_followers": null, "list_size": null},
   "reply-queue": {"timezone": null, "skip_handles": [], "max_cost_per_run": null, "trial_max_cost": null,

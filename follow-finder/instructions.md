@@ -33,6 +33,33 @@ Script: `$BOTS_HOME/creator-scout/creator_scout.py`.
 4. The report lists how many creators each filter dropped. If it says only a partial Follow Audit scan exists, pass that on: people the owner already follows may still show up until a full scan runs.
 5. Share the shortlist. The hosted page has a Never show button that hides an account for good. You never follow anyone.
 
+## Game tab (off by default)
+
+A daily game on the Follow Finder page that turns the shortlist into a pack to open. The build makes no X API calls (it prints "X calls: 0"). Only the optional image check spends, and only after showing its cost. It is off until the owner says "turn on Game", which creates `$BOTS_HOME/creator-scout/game/LIVE`. Saying "turn off Game" deletes that file and the next publish removes game.json.
+
+**Embeds and images:** the Game uses only X's official embed widget (`platform.twitter.com/widgets.js`). No unofficial endpoints. The Blind Taste Test shows the official embed under a solid cover over the name row and footer, with taps blocked until Keep or Pass. Images stay blurred behind Tap to show until checked. The optional image check (`game_image_check` in config.json, **off by default**) reads each unrated pick's best post once with X media expansions so the bot can look at the images. It costs one post read plus one attached profile per pick at the crew's price table rates (about $0.005 per pick today). `daily_vision.py cost` prints the exact cost first, and `prep` reads nothing without `--yes`.
+
+Daily order (after the normal run):
+1. Only if the owner turned on the image check: `python3 $BOTS_HOME/creator-scout/game/nsfw/daily_vision.py cost`, tell the owner the cost line, then `daily_vision.py prep --yes`, look at each `nsfw/sheets/daily_*.jpg` yourself and rate every pending handle: `python3 daily_vision.py rate HANDLE safe|suggestive|explicit|unchecked "note"`. Suggestive or explicit adds the handle to never_show. Then `python3 daily_vision.py apply`.
+2. `bash $BOTS_HOME/creator-scout/game/daily_game.sh`
+3. Publish as usual. game.json and the Game tab ship only when game/LIVE exists.
+
+What it does:
+- Daily Pack of 5 from Follow Finder's picks, shown with X's official embed widget, matched to the page's light or dark theme and lazy loaded.
+- Blind Taste Test: the creator is hidden ("Hidden creator") until the owner picks Keep or Pass, then the real embed is revealed. Before reveal a solid cover hides the name row and footer and taps are blocked.
+- Not like this: chips or the owner's own words become a never-scout or filter rule. Rules learned lists them with Undo.
+- Score: replies 3, follows 1, keeper at 30 days 5. Follows count only when Follow Audit's nightly list confirms them, capped at 5 follows a day. Follow-backs earn nothing.
+- NSFW filter, always on and not a setting: words, adult links, X's possibly_sensitive flag and the bot's own vision verdicts. Unrated picks stay blurred behind Tap to show.
+- Rarity is relative to today's Follow Finder pool: Legendary is the top 3% by the Hidden gem stand-in score, Rare the next 15%, everything else Common. Each pack has at least 1 Rare when the pool has one. The Legendary why line says Hidden gem (in your niche, you don't follow them, nobody you follow is tagged in their bio) and never claims audience overlap.
+- After any swap, the pack is filtered again by X user ID against Follow Audit's list. An Already following button hides a card and is kept by user ID until Follow Audit's list catches up.
+- Niche words come from `game_niche` in config.json, or from the owner's search queries when that is empty. Never fill them in for the owner.
+
+Chat commands ($0, no X calls, same rules the page writes):
+- "not like @handle because <reason>": `python3 $BOTS_HOME/creator-scout/game/game_tab.py chat "not like @handle because <reason>"`
+- "undo rule <id, chip or words>": `python3 $BOTS_HOME/creator-scout/game/game_tab.py chat "undo rule <text>"`
+- "already following @handle": `python3 $BOTS_HOME/creator-scout/game/game_tab.py chat "already following @handle"` (same as the page's Already following button)
+Reply with the one-line output. If it says more than one rule matches, list them and ask which. Rules apply from the next pack.
+
 ## Update notice (once a day)
 
 Once a day (from the Update check routine if the owner has one, otherwise the first time you work each day), run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list anonymously, costs $0 and never touches X. It runs at most once a day per computer, so other bots here may already have done it.

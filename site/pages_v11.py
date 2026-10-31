@@ -56,6 +56,10 @@ background:var(--soft);border-radius:8px}
 .who{font-weight:600;text-decoration:none;cursor:pointer}.nm{color:var(--mute);font-size:13px}
 .txt{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.remb{margin:8px 0 4px;max-width:550px;position:relative}.remb .twitter-tweet{margin:0!important}
+.card.emb-ok .txt{display:none}.remb.sens{min-height:120px;border-radius:12px;background:var(--soft)}.remb.sens .rbx{display:none}
+.rcov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;font:600 15px system-ui;cursor:pointer}.rcov small{font-weight:400;opacity:.85}
+.rctx{margin-top:6px}.rctxb{margin-top:6px;padding-left:10px;border-left:2px solid var(--line)}
 .chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
 .chip.strong{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
 .chip.flag{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
@@ -242,10 +246,13 @@ def snippet(text, words=6):
     return " ".join(w[:words]) + ("…" if len(w) > words else "") if w else ""
 
 
-def reply_queue(items, saved, post_text=None):
+def reply_queue(items, saved, post_text=None, sensitive=None):
     """items: Reply Queue DATA rows {key, username, chips, text, links, g}.
-    post_text: {post id: text} from the bot's posts.json, for the Drowning posts list."""
+    post_text: {post id: text} from the bot's posts.json, for the Drowning posts list.
+    sensitive: post ids X marked possibly_sensitive (saved by engagement.py on the same read, $0).
+    Embeds use only X's official widgets.js, lazy-loaded, compact (no thread)."""
     post_text = post_text or {}
+    sensitive = set(sensitive or ())
     ex = (saved or {}).get("extra") or {}
     regs = {k.lower(): v for k, v in (ex.get("regulars") or {}).items()}
     rows, posts = [], {}
@@ -257,7 +264,8 @@ def reply_queue(items, saved, post_text=None):
         rows.append({"k": str(x.get("key", i)), "u": x.get("username", ""), "kind": kind, "i": i,
                      "chips": [c.get("t", "") for c in x.get("chips") or []][1:], "text": x.get("text", ""),
                      "open": (x.get("links") or [{}])[0].get("u", ""), "your": your, "reg": regs.get(x.get("username", "").lower(), 0),
-                     "g": x.get("g", "")})
+                     "g": x.get("g", ""), "s": 1 if str(x.get("key", "")) in sensitive else 0,
+                     "p": your.rstrip("/").split("/")[-1].split("?")[0] if your else ""})
     drown = sorted(((len(v), p, v) for p, v in posts.items()), reverse=True)[:5]
     med = next((l for l in (saved or {}).get("lines", []) if l.startswith("Median time to reply")), "Median time to reply: no done marks yet")
     def ptitle(url):
@@ -279,30 +287,43 @@ def reply_queue(items, saved, post_text=None):
             + data_script("rq-data", rows) + "<script>" + r"""
 (function(){var D=JSON.parse(document.getElementById("rq-data").textContent),V=window.V11,f="all",s="m";
 function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
-function ri(id,t){return "https://x.com/intent/post?in_reply_to="+encodeURIComponent(id)+(t?"&text="+encodeURIComponent(t):"")}
+var SHOWN={},W=null;
+function wj(){if(W)return W;W=new Promise(function(ok,no){var s=document.createElement("script");s.src="https://platform.twitter.com/widgets.js";s.async=true;s.charset="utf-8";s.onload=function(){window.twttr&&twttr.ready?twttr.ready(function(){ok(twttr)}):no()};s.onerror=no;document.head.appendChild(s)});return W}
+function th(){return document.documentElement.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}
+function mk(box,id,cb){wj().then(function(t){return t.widgets.createTweet(id,box,{theme:th(),dnt:true,conversation:"none",cards:"hidden"})}).then(function(w){cb(!!w)}).catch(function(){cb(false)})}
+function emb(x){if(!/^\d{6,}$/.test(x.k))return "";var sens=x.s&&!SHOWN[x.k];
+ return '<div class="remb'+(sens?' sens':'')+'" data-id="'+esc(x.k)+'"'+(x.p?' data-p="'+esc(x.p)+'"':'')+'>'+
+ (sens?'<button class="rcov" type="button" data-rshow><span>Tap to show</span><small>X marked this post sensitive</small></button>':'')+
+ '<div class="rbx"></div><div class="rno note" hidden>Embed did not load. The saved text is above, and Open goes to the post on X.</div>'+
+ (x.p?'<button class="btn rctx" type="button" data-rctx>Show context</button><div class="rctxb"></div>':'')+'</div>'}
+function load(el){if(el.dataset.done||el.classList.contains("sens"))return;el.dataset.done=1;
+ mk(el.querySelector(".rbx"),el.dataset.id,function(ok){var c=el.closest(".card");if(ok){c&&c.classList.add("emb-ok")}else{el.querySelector(".rno").hidden=false}})}
+var IO="IntersectionObserver" in window?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IO.unobserve(e.target);load(e.target)}})},{rootMargin:"400px"}):null;
+function watch(){document.querySelectorAll("#rq-list .remb").forEach(function(el){if(!el.classList.contains("sens"))IO?IO.observe(el):load(el)})}
 function card(x){var done=V.on("done",x.u),dr=localStorage.getItem("v11-draft-"+x.k)||"";
  return '<div class="card'+(done?' done':'')+'" data-h="'+esc(x.u)+'"><div class="row"><div class="grow">'+
  '<a class="who" href="https://x.com/'+esc(x.u)+'" target="_blank" rel="noopener">@'+esc(x.u)+'</a> <span class="nm">'+esc(x.kind)+'</span>'+
  '<div class="chips">'+(x.reg?'<span class="chip strong">Regular · '+x.reg+' conversations</span>':'')+
  x.chips.map(function(c){return '<span class="chip">'+esc(c)+'</span>'}).join("")+'</div>'+
- '<div class="txt">'+esc(x.text)+'</div><label class="note">Your reply draft</label><textarea data-k="'+esc(x.k)+'">'+esc(dr)+'</textarea>'+
- '<div class="btns"><a class="btn pri" data-act="reply" target="_blank" rel="noopener" href="'+ri(x.k,dr)+'">Reply</a>'+
- '<a class="btn" data-act="like" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id='+encodeURIComponent(x.k)+'">Like</a>'+
+ '<div class="txt">'+esc(x.text)+'</div>'+emb(x)+
+ '<div class="btns"><a class="btn pri" data-act="like" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id='+encodeURIComponent(x.k)+'">Like</a>'+
  '<a class="btn" data-act="open" target="_blank" rel="noopener" href="'+esc(x.open)+'">Open</a>'+
  '<button type="button" data-done="'+esc(x.u)+'">'+(done?'Done ✓':'Mark done')+'</button></div></div></div></div>'}
 function render(){var L=D.filter(function(x){return (f==="all"||(f==="regular"?x.reg>0:x.kind===f))&&
  (document.getElementById("rq-done").checked||!V.on("done",x.u))});
  L.sort(function(a,b){if(s==="m")return (b.kind==="mention")-(a.kind==="mention")||a.i-b.i;if(s==="old")return b.i-a.i;
   if(s==="reg")return b.reg-a.reg||a.i-b.i;return a.i-b.i});
- document.getElementById("rq-list").innerHTML=L.map(card).join("")||'<p class="note">Nothing waiting. Nice.</p>';
+ document.getElementById("rq-list").innerHTML=L.map(card).join("")||'<p class="note">Nothing waiting. Nice.</p>';watch();
  document.getElementById("rq-open").textContent=D.filter(function(x){return !V.on("done",x.u)}).length}
 V.renderers.push(render);
 document.getElementById("rq-f").onclick=function(e){var b=e.target.closest("button");if(!b)return;f=b.getAttribute("data-f");
  this.querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x===b)});render()};
 document.getElementById("rq-s").onchange=function(){s=this.value;render()};document.getElementById("rq-done").onchange=render;
-document.getElementById("rq-list").addEventListener("input",function(e){if(e.target.tagName!=="TEXTAREA")return;var k=e.target.getAttribute("data-k");
- localStorage.setItem("v11-draft-"+k,e.target.value);var a=e.target.parentNode.querySelector('[data-act=reply]');a.href=ri(k,e.target.value)});
-document.getElementById("rq-list").addEventListener("click",function(e){var b=e.target.closest("[data-done]");if(!b)return;var h=b.getAttribute("data-done");
+document.getElementById("rq-list").addEventListener("click",function(e){var r=e.target.closest("[data-rshow],[data-rctx]");
+ if(r){e.preventDefault();var el=r.closest(".remb");if(r.hasAttribute("data-rshow")){SHOWN[el.dataset.id]=1;el.classList.remove("sens");r.remove();load(el)}
+  else{var c=el.querySelector(".rctxb");if(c.dataset.on){c.innerHTML="";delete c.dataset.on;r.textContent="Show context"}
+   else{c.dataset.on=1;r.textContent="Hide context";c.innerHTML='<div class="rbx"></div>';mk(c.firstChild,el.dataset.p,function(ok){if(!ok)c.innerHTML='<p class="note">Context post did not load. Open it on X.</p>'})}}return}
+ var b=e.target.closest("[data-done]");if(!b)return;var h=b.getAttribute("data-done");
  var was=V.on("done",h);V.set("done",h,{on:!was});if(!was)V.toast("Marked @"+h+" done.",function(){V.set("done",h,{on:false})})});
 })();</script>""")
     return body
@@ -587,7 +608,7 @@ def home_reply_queue(rows, n=5):
         f'<div class="item">{_who(x.get("username", ""))} <span class="nm">{E(((x.get("chips") or [{}])[0].get("t") or "reply").lower())}'
         f'{" · " + E(x["chips"][1]["t"]) if len(x.get("chips") or []) > 1 else ""}</span>'
         f'<div class="txt">{RAW(snippet(x.get("text", ""), 14))}</div><div class="btns">'
-        f'<a class="btn pri" target="_blank" rel="noopener" href="{RAW(intent_reply(x.get("key", "")))}">Reply</a>'
+        f'<a class="btn pri" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id={E(x.get("key", ""))}">Like</a>'
         f'<a class="btn" target="_blank" rel="noopener" href="{RAW(((x.get("links") or [{}])[0]).get("u", ""))}">Open</a></div></div>'
         for x in rows)
 
@@ -674,9 +695,10 @@ def tiles_html(pairs, cls="tiles"):
                                            for k, v in pairs) + "</div>"
 
 
-def analytics_log(posts, followers, verified, monetized, sv=None, goal=500000, days=90):
+def analytics_log(posts, followers, verified, monetized, sv=None, goal=500000, days=90, tracker=None):
     """posts: rows of posts_latest.csv. followers: rows of followers.csv (oldest first).
-    verified: rows of verified_daily_latest.csv. The 500K chart shows only when monetized."""
+    verified: rows of verified_daily_latest.csv. tracker: rows of tracker.csv (oldest first).
+    The 500K chart and the leave-window chart show only when monetized."""
     from datetime import datetime as _dt
     ps = []
     for r in posts:
@@ -727,7 +749,53 @@ def analytics_log(posts, followers, verified, monetized, sv=None, goal=500000, d
                 + (f'<div class="chart" aria-label="Verified impressions per day">{bars}</div>'
                    f'<p class="note">Each bar is one day, {E(vs[0][0])} to {E(vs[-1][0])}.</p>' if vs else
                    '<p class="note">No verified impressions pulled yet.</p>') + '</div>')
+        out += leave_window(verified, tracker or [], days)
     return out
+
+
+def leave_window_data(verified, tracker, days=90):
+    """The next 7 days to leave the rolling window, same math as x_analytics.window_stats.
+    Returns None when there is no verified daily data."""
+    from datetime import date as _d, datetime as _dt, timedelta as _td
+    by = {}
+    for r in verified:
+        if r.get("date") and str(r.get("impressions") or "").strip() != "":
+            by[r["date"].strip()] = _n(r.get("impressions"))
+    if not by:
+        return None
+    last = tracker[-1] if tracker else {}
+    tv = _n(last.get("value")) or None
+    try:
+        today = _dt.fromisoformat((last.get("pulled_at_et") or "").strip()).date()
+    except ValueError:
+        today = _d.today()
+    oldest = today - _td(days=days)
+    drops = []
+    for k in range(7):
+        d = (oldest + _td(days=k)).isoformat()
+        drops.append({"date": d, "on": (today + _td(days=k + 1)).isoformat(), "v": by.get(d)})
+    return {"drops": drops, "total": sum(x["v"] or 0 for x in drops), "tracker": tv, "days": days}
+
+
+def leave_window(verified, tracker, days=90):
+    q = leave_window_data(verified, tracker, days)
+    if not q:
+        return ""
+    from datetime import date as _d
+    fd = lambda s: _d.fromisoformat(s).strftime("%b %d").replace(" 0", " ")
+    mx = max([x["v"] or 0 for x in q["drops"]] + [1])
+    cols = "".join(
+        '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">'
+        f'<div class="nm" style="font-size:11px">{"–" if x["v"] is None else _fmt(x["v"])}</div>'
+        f'<div style="width:100%;background:rgba(100,150,255,.45);border-radius:4px 4px 0 0;height:{round(100 * (x["v"] or 0) / mx)}px" '
+        f'title="{E(x["date"])} leaves on {E(x["on"])}"></div>'
+        f'<div class="nm" style="font-size:11px;text-align:center">{E(fd(x["on"]))}<br>from {E(fd(x["date"]))}</div></div>'
+        for x in q["drops"])
+    of = f' of {_fmt(q["tracker"])}' if q["tracker"] else ""
+    return ('<div class="card leave-window"><h2 style="margin-top:0">Leaving the 500K window, next 7 days</h2>'
+            f'<p class="note">Verified impressions from the oldest days of the {q["days"]}-day window. '
+            f'Each drops off the tracker on that day\'s reading. Total leaving: <b>{_fmt(q["total"])}</b>{of}.</p>'
+            f'<div style="display:flex;gap:6px;align-items:flex-end;margin-top:10px">{cols}</div></div>')
 
 
 # ---------------------------------------------------------------- Your week
@@ -785,6 +853,14 @@ def week(sections, totals=None, label=""):
         cards.append(f'<div class="card"><h2>{t}</h2><p class="note" style="margin:0 0 4px">{E(status)}</p>'
                      + (tiles_html(tiles) if tiles else "") + (lines_html(lines) if lines else "") + "</div>")
     return top + '<div class="wk">' + "".join(cards) + "</div>"
+
+
+def week_unused(handles):
+    """Unused Shoutout Picker picks, at the bottom of Your week. Not a to-do, just not used this week."""
+    if not handles:
+        return ""
+    return ('<div class="card"><h2>Unused shoutout picks</h2><p class="note">Not tagged in a shoutout post this week.</p>'
+            + "".join(f'<a class="chip" href="https://x.com/{E(h)}" target="_blank" rel="noopener">@{E(h)}</a> ' for h in handles) + "</div>")
 
 
 def redirect(to):

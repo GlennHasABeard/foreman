@@ -67,3 +67,7 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
   - `show me everything from @name` shows the per-person timeline and notes
   - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
   - `mark @name done` and `mark @name pending` (Done and Pending)
+  - `shoutout goal N` sets the weekly shoutout goal shown on Your week (`shoutout goal 0` clears it)
+
+## Your week (v1.1.1)
+Shoutouts are counted from the owner's own saved posts: a post that says "shoutout" and tags an @handle (the automatic @prefix of a reply does not count). Your week shows "N of goal" against `weekly_goal` in config.json, which the owner sets at setup or with `shoutout goal N`. Picks from this week's list that were not tagged are listed at the bottom of Your week. Not a to-do.

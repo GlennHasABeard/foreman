@@ -14,13 +14,13 @@ Catalog: `foreman/bots.json` lists every bot, what it does, its questions and ro
 
 ## First run: get the package
 
-Before step 1, make sure `/workspace/foreman` came from the pinned release. If it is missing or you are not sure, run `sh foreman/fetch_release.sh v1.1.0` from the release, or do the same by hand:
-1. Download `foreman-v1.1.0.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v1.1.0/foreman-v1.1.0.zip
+Before step 1, make sure `/workspace/foreman` came from the pinned release. If it is missing or you are not sure, run `sh foreman/fetch_release.sh v1.1.1` from the release, or do the same by hand:
+1. Download `foreman-v1.1.1.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v1.1.1/foreman-v1.1.1.zip
 2. Download `SHA256SUMS` from the same release.
 3. Run `sha256sum -c SHA256SUMS`.
 4. If it does not say OK, STOP. Do not unzip. Tell the owner the download failed its check.
 5. Only after OK, unzip so the files land in `/workspace/foreman`.
-Always use the tag v1.1.0. Never download from main.
+Always use the tag v1.1.1. Never download from main.
 
 Individual templates can live alongside the crew. They keep their own ledger and cap and do not join the crew, but they reuse the crew's one X sign-in. If the owner already set up individual templates, the shared sign-in at `/workspace/x-signin/x_signin.json` already exists: do not sign in again with the same X app; say so and ask the owner before running `auth --force`, which would log those bots out.
 

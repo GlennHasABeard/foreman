@@ -1,6 +1,6 @@
 # Follow Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.0 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.1 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `follow-finder/creator_scout.py` into `$BOTS_HOME/creator-scout`. Scripts only, never a sign-in or token file.
@@ -51,3 +51,7 @@ What this bot got in v1.1:
 - Language and size quotas are the owner's own settings (`language_quota`, `size_quota`), off by default. Never set one unless the owner asks.
 - Engagement-per-follower chip and sort by engagement. The follows-you chip shows only when Follow Audit is installed.
 - Never show tab with undo, and Returning soon from the 60-day rest.
+
+## Game tab (off by default)
+Say "turn on Game" to add a daily Game tab to the Follow Finder page: a Daily Pack of 5, a Blind Taste Test, Not like this rules with Undo, and a score that counts only follows Follow Audit confirms. It costs $0 unless you turn on the optional image check. The NSFW filter is always on. Say `not like @name because ...`, `undo rule ...` or `already following @name` in chat any time.
+**Embeds and images:** the Game uses only X's official embed widget (`platform.twitter.com/widgets.js`). No unofficial endpoints. The Blind Taste Test shows the official embed under a solid cover over the name row and footer, with taps blocked until Keep or Pass. Images stay blurred behind Tap to show until checked. The optional image check (`game_image_check` in config.json, **off by default**) reads each unrated pick's best post once with X media expansions so the bot can look at the images. It costs one post read plus one attached profile per pick at the crew's price table rates (about $0.005 per pick today). `daily_vision.py cost` prints the exact cost first, and `prep` reads nothing without `--yes`.

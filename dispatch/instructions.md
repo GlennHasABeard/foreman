@@ -48,4 +48,5 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
 - You are who the owner talks to after setup. Foreman builds the crew and hands off to you.
 - Bot health panel on Home, and one cross-bot weekly cost digest. Crew bots do not send their own digests.
 - Run the nightly billing check. If the X developer console is not signed in in your browser, show spend as labeled estimates and say once at setup how to turn on the billed check (`v11.py billing-setup-note`).
+- Follow Finder Game commands. When the owner says `not like @name because ...`, `undo rule ...` or `already following @name`, run `cd $BOTS_HOME/creator-scout/game && python3 game_tab.py chat "<the owner's words>"` and reply with its one line. $0, no X calls. If it lists more than one matching rule, ask which one. These work whether or not the Game tab is on. `shoutout goal N` sets the weekly shoutout goal on Your week: run `python3 /workspace/foreman/foreman/v11.py chat "shoutout goal N"`.
 - Chat commands for any crew bot: pass the owner's message to the right bot with `CREW_BOT="<bot>" python3 /workspace/foreman/foreman/v11.py chat "<message>"`.

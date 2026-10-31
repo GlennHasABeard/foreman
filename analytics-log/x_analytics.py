@@ -573,6 +573,22 @@ class P:
 # start
 # ----------------------------------------------------------------------------
 
+# Copy-on-change: the per-video list and the payouts list are re-copied only when X's list changed.
+# A file identical to the last one saved is skipped, and an un-copied file keeps the saved copy.
+CHANGED_ONLY_FILES = {"video_list.csv", "payouts_list.csv"}
+
+
+def copy_state(p):
+    # same file and keys as the live bot (hash:<file name>)
+    return read_json(os.path.join(p.data, "weekly_state.json"), {})
+
+
+def file_hash(path):
+    import hashlib
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read().replace(b"\r\n", b"\n").strip()).hexdigest()
+
+
 def cmd_start(p, kind):
     t = now_et()
     base = f"{t.strftime('%Y-%m-%d_%H%M')}_{kind}"
@@ -614,6 +630,8 @@ def cmd_start(p, kind):
     for name, (kinds, what) in RAW_FILES.items():
         if mode in kinds:
             opt = " (optional)" if name in OPTIONAL_FILES else ""
+            if name in CHANGED_ONLY_FILES:
+                opt = " (only if the list changed since the last pull; an identical copy is skipped)"
             lines.append(f"- {name}{opt}: {what}")
     lines += ["", "Fill in raw/panels.txt, one value per line, exactly as shown:"] + [f"- {k}" for k in keys]
     if extra_keys:
@@ -768,6 +786,7 @@ def cmd_finish(p, folder):
         p.data = test_data
     started = datetime.fromisoformat(man["started_at_et"])
     pulled = man["started_at_et"]
+    wstate = copy_state(p)
     today = started.date()
     raw = os.path.join(folder, "raw")
     flags, items = [], {}
@@ -786,11 +805,20 @@ def cmd_finish(p, folder):
             return None
         f = have(name)
         if not f:
+            if name in CHANGED_ONLY_FILES and wstate.get("hash:" + name):
+                items[name] = "not re-copied (unchanged), saved copy kept"
+                return None
             items[name] = "missing"
             if name not in OPTIONAL_FILES:
                 flags.append(f"{name} missing")
         else:
             items[name] = "ok"
+            if name in CHANGED_ONLY_FILES and kind != "test":
+                h = file_hash(f)
+                if wstate.get("hash:" + name) == h:
+                    items[name] = "unchanged since last pull, skipped"
+                    return None
+                wstate["hash:" + name] = h
         return f
 
     panels = read_panels(os.path.join(raw, "panels.txt"))
@@ -949,7 +977,12 @@ def cmd_finish(p, folder):
             out["video_list"] = {"status": "ok", "videos": len(vrows), "linked": linked,
                                  "link_methods": out_methods, "rows": vrows}
         else:
-            out["video_list"] = {"status": "missing"}
+            # list unchanged or not re-copied: link posts from the saved list
+            for r in read_csv(p.d("video_list_latest.csv")):
+                if r.get("linked_post"):
+                    vids[r["linked_post"]] = r
+            out["video_list"] = {"status": items.get("video_list.csv", "missing"),
+                                 "carried_from_saved": len(vids)}
         if cf:
             out["posts"] = process_posts(p, cfg, cf, pid, started, vids, flags)
         else:
@@ -1024,7 +1057,7 @@ def cmd_finish(p, folder):
                                    "rows": before - removed + len(new_rows), "listed_total": round(total, 2)}
         else:
             out["payouts_list"] = {"status": NOT_AVAILABLE if unavailable(cfg, "payouts_list.csv")
-                                   else "not saved this pull"}
+                                   else items.get("payouts_list.csv", "not saved this pull")}
 
         # 7. payouts
         amt, pdt = pv.get("payout_amount", {}), pv.get("payout_date", {})
@@ -1061,6 +1094,8 @@ def cmd_finish(p, folder):
     out["items"] = items
     out["flags"] = flags
     out["finished_at_et"] = now_et().isoformat(timespec="seconds")
+    if mode == "night" and kind != "test":
+        write_json(os.path.join(p.data, "weekly_state.json"), wstate)
     write_json(os.path.join(folder, "pull.json"), out)
     man["finished"] = True
     write_json(man_path, man)

@@ -17,3 +17,7 @@ The look is one plain black and white template with system fonts. Page scripts k
 ## v1.1
 
 Home shows panels only for installed bots. With one hosted bot there is no Home: that bot's page is home and gets follow-ups and its status line. Without hosting, every KV feature works by chat and saves in the bot's own files (see each guide). Pages use `foreman/v11.py` page design: plain light and dark, real buttons, Last updated in coral when stale.
+
+## Game tab (off by default)
+Off unless `creator-scout/game/LIVE` exists. When on, publish copies `game/live/game.json` to the site and adds the Game tab to the final `follow-finder.html`. Its marks use the same `CHECKS` KV binding (pages `game-rules`, `game-binder`, `game-taste`, `game-pending`, `game-following`). When off, publish deletes `game.json` from the site.
+**Embeds and images:** the Game uses only X's official embed widget (`platform.twitter.com/widgets.js`). No unofficial endpoints. The Blind Taste Test shows the official embed under a solid cover over the name row and footer, with taps blocked until Keep or Pass. Images stay blurred behind Tap to show until checked. The optional image check (`game_image_check` in config.json, **off by default**) reads each unrated pick's best post once with X media expansions so the bot can look at the images. It costs one post read plus one attached profile per pick at the crew's price table rates (about $0.005 per pick today). `daily_vision.py cost` prints the exact cost first, and `prep` reads nothing without `--yes`.

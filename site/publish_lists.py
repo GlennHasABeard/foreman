@@ -29,6 +29,7 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import date, datetime
@@ -508,6 +509,41 @@ render();
 })();</script>"""
 
 
+# Follow Finder Game tab. OFF unless the owner says "turn on Game" (creates game/LIVE).
+GAME_DIR = os.path.join(BOTS_HOME, "creator-scout", "game")
+GAME_FLAG, GAME_JS, GAME_JSON = (os.path.join(GAME_DIR, "LIVE"), os.path.join(GAME_DIR, "game_ui.js"),
+                                 os.path.join(GAME_DIR, "live", "game.json"))
+
+
+def game_live():
+    return os.path.exists(GAME_FLAG) or os.environ.get("GAME_LIVE_PREVIEW") == "1"
+
+
+def game_publish():
+    """Ship game.json and put the Game tab on the FINAL follow-finder.html. Never ships game data when off.
+    The Daily Pack uses only X's official embed widget (platform.twitter.com widgets.js)."""
+    gj = os.path.join(SITE_DIR, "game.json")
+    if not game_live():
+        if os.path.exists(gj):
+            os.remove(gj)
+        return "off"
+    if not os.path.exists(GAME_JSON):
+        return "on, but no game.json yet (run game/daily_game.sh)"
+    shutil.copyfile(GAME_JSON, gj)
+    sp = os.path.join(SITE_DIR, "follow-finder.html")
+    if os.path.exists(sp):
+        with open(sp, encoding="utf-8") as f:
+            pg = f.read()
+        if "data-lists-game" not in pg and "</body>" in pg:
+            i = pg.rfind("</body>")
+            with open(GAME_JS, encoding="utf-8") as f:
+                js = f.read()
+            pg = pg[:i] + "<script data-lists-game>" + js + "</script>" + pg[i:]
+            with open(sp, "w", encoding="utf-8") as f:
+                f.write(pg)
+    return "on follow-finder.html"
+
+
 def copy_page(src, dst):
     with open(src, encoding="utf-8") as f:
         page = f.read()
@@ -605,7 +641,9 @@ def v11_render(w):
         status = (sv or {}).get("status") or "Ran OK"
         if title == "Reply Queue":
             posts = v._load(os.path.join(w.root(title), "posts.json"), {})
-            body = P.reply_queue(data, sv, {k: (p or {}).get("text", "") for k, p in posts.items() if isinstance(p, dict)})
+            evs = v._load(os.path.join(w.root(title), "events.json"), {})
+            sens = {k for k, e in evs.items() if isinstance(e, dict) and e.get("sensitive")}
+            body = P.reply_queue(data, sv, {k: (p or {}).get("text", "") for k, p in posts.items() if isinstance(p, dict)}, sens)
         elif title == "Fan Finder":
             body = P.fan_finder(data, sv, store)
         elif title == "Follow Finder":
@@ -685,12 +723,14 @@ def v11_render(w):
             st = v.load_store("Reply Queue")
             gone = {h.lower() for h in list(st.get("done") or {}) + list(st.get("never") or {})}
             strip.append(("replies waiting", sum(1 for x in datas["Reply Queue"] if (x.get("username") or "").lower() not in gone)))
+            rh = w.replies_handled(7) or {}
+            strip.append((f'handled this week: {rh.get("replied", 0)} replied, {rh.get("liked", 0)} liked, {rh.get("marked", 0)} Done', rh.get("done", 0)))
         strip.append(("follow-ups due", due))
         fe = w.follow_events(7)
         if fe is not None:
             strip.append(("new followers this week", fe["new"]))
         today, cap = w.spend_days(1)
-        strip.append(("today's spend" + (f" of ${cap:.2f} cap" if cap else ""), f"${today:.2f}"))
+        strip.append(("today's spend" + (f" of ${cap:.2f} cap" if cap else "") + " (X billing days, UTC)", f"${today:.2f}"))
         ok = [n for n in inst if (w.saved(n) or {}).get("status", "").startswith("Ran OK")]
         status = f"{len(ok)} of {len(inst)} bots ran OK on their last run."
         with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
@@ -709,20 +749,25 @@ def week_totals(w, P):
     label = f"{start.strftime('%b')} {start.day} – {today.strftime('%b')} {today.day}"
     out = []
     if "Reply Queue" in inst:
-        out.append(("replies handled", w.done_since("Reply Queue"), "marked done on the page or in chat"))
+        rh = w.replies_handled(7) or {}
+        out.append(("replies handled", rh.get("done", 0),
+                    f'{rh.get("replied", 0)} replied, {rh.get("liked", 0)} liked, {rh.get("marked", 0)} marked Done, of {rh.get("items", 0)} items'))
         med = next((l for l in (w.saved("Reply Queue") or {}).get("lines", []) if "median time to reply" in l.lower()), "")
         m = re.search(r"(\d+\s*(?:min|h|hr|hours?|minutes?)\b)", med)
         out.append(("median time to reply", m.group(1) if m else "—", "over the last 7 days"))
     if "Shoutout Picker" in inst:
-        out.append(("shoutouts done", w.done_since("Shoutout Picker"), ""))
+        so = w.shoutouts_week(7) or {}
+        out.append(("shoutouts", f'{so.get("posts", 0)} of {so["goal"]}' if so.get("goal") else so.get("posts", 0),
+                    'your posts saying "shoutout" that tag an @handle' + ("" if so.get("goal") else ". Set a weekly goal: say \"shoutout goal 5\"")))
     fe = w.follow_events(7)
     if fe is not None:
         out.append(("new followers", fe["new"], ""))
         out.append(("unfollows", fe["unfollowed"], f'plus {fe["gone"]} account gone' if fe["gone"] else "no accounts gone"))
     if "Rerun Picker" in inst:
-        out.append(("reruns used", w.reruns_used(7), "your older posts quoted or reposted"))
+        used, picked = w.reruns_used(7) or (0, 0)
+        out.append(("reruns used", f"{used} of {picked}" if picked else used, "from your newest picks file: quoted, reposted, reused or marked Done"))
     spent, cap = w.spend_days(7)
-    out.append(("spend this week", f"${spent:.2f}", f"cap ${cap * 7:.2f} for 7 days (${cap:.2f} a day)" if cap else "no daily cap set"))
+    out.append(("spend this week", f"${spent:.2f}", (f"cap ${cap * 7:.2f} for 7 days (${cap:.2f} a day)" if cap else "no daily cap set") + ". X billing days, UTC"))
     return out, label
 
 
@@ -745,7 +790,9 @@ def v11_extra_pages(w, P, navitems, demo, hosted):
         cfg = w._cfg("Analytics Log")
         body = P.analytics_log(_csv_rows(os.path.join(d, "posts_latest.csv")), _csv_rows(os.path.join(d, "followers.csv")),
                                _csv_rows(os.path.join(d, "verified_daily_latest.csv")),
-                               v.show_500k_chart(cfg.get("has_monetization", cfg.get("monetized"))), sv)
+                               v.show_500k_chart(cfg.get("has_monetization", cfg.get("monetized"))), sv,
+                               days=int(cfg.get("window_days") or 90),
+                               tracker=_csv_rows(os.path.join(d, "tracker.csv")))
         if sv:
             body += "<h2>This run</h2>" + P.lines_html(sv["lines"] + [sv["spend"]])
         at = w._ts(sv["at"]) if sv else v.now()
@@ -776,7 +823,9 @@ def v11_extra_pages(w, P, navitems, demo, hosted):
         secs.append(("Dispatch", "", "Bot health", [], w.health()))
     with open(os.path.join(SITE_DIR, "week.html"), "w", encoding="utf-8") as f:
         totals, label = week_totals(w, P)
-        f.write(P.shell("Your week", "week", v.last_updated(v.now()), f"{len(inst)} bots installed. Totals cover {label}.", P.week(secs, totals, label),
+        un = (w.shoutouts_week(7) or {}).get("unused") or []
+        body = P.week(secs, totals, label) + P.week_unused(un)
+        f.write(P.shell("Your week", "week", v.last_updated(v.now()), f"{len(inst)} bots installed. Totals cover {label}.", body,
                         empty, navitems, demo, "", hosted))
     built.append("week.html")
     for title, old in P.OLD_FILES.items():
@@ -850,6 +899,10 @@ def main():
                 print(f"v1.1 pages: {', '.join(built)}")
         except Exception as e:  # never let v1.1 pages block the lists
             print(f"v1.1 pages skipped: {e}", file=sys.stderr)
+    try:  # Game tab, after v1.1 pages rewrite follow-finder.html
+        print("Game tab:", game_publish())
+    except Exception as e:  # never let the Game block the lists
+        print(f"Game tab skipped: {e}", file=sys.stderr)
     if w and mode == "own_page":
         # one hosted bot: its own page is home, follow-ups and status show there
         only = [n for n, _, t, _ in PAGES if t in w.v11.installed()]

@@ -17,6 +17,7 @@ import csv
 import html
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -547,14 +548,90 @@ def follow_events(days=7):
     return out
 
 
+def _own_posts():
+    """The owner's own saved posts, merged by id from Reply Queue and Rerun Picker posts.json ($0)."""
+    out = {}
+    for n in ("Rerun Picker", "Reply Queue"):
+        if n in v11.installed():
+            d = _j(os.path.join(root(n), "posts.json"), {})
+            for k, v in (d.items() if isinstance(d, dict) else []):
+                if isinstance(v, dict):
+                    out.setdefault(k, {}).update({a: b for a, b in v.items() if b is not None or a not in out.get(k, {})})
+    return out
+
+
+def _recent(posts, days):
+    cut = datetime.now(v11.UTC) - timedelta(days=days)
+    return {k: v for k, v in posts.items() if (_ts(v.get("created") or "") or cut) > cut}
+
+
+def replies_handled(days=7):
+    """Reply Queue items from the last `days` days handled by a reply (your saved posts), a like (my_likes.json)
+    or a Done mark. Each item counts once, in that order. None when Reply Queue isn't installed."""
+    if "Reply Queue" not in v11.installed():
+        return None
+    r = root("Reply Queue")
+    ev = _j(os.path.join(r, "events.json"), {})
+    cut = datetime.now(v11.UTC) - timedelta(days=days)
+    items = [k for k, e in ev.items() if isinstance(e, dict) and e.get("kind") != "like"
+             and (_ts((e.get("created") or "").replace("Z", "+00:00")) or cut) > cut]
+    rto = {v.get("replied_to") for v in _own_posts().values() if v.get("kind") == "reply" and v.get("replied_to")}
+    likes = _j(os.path.join(r, "my_likes.json"), [])
+    likes = set(likes if isinstance(likes, list) else likes.keys() if isinstance(likes, dict) else [])
+    done = v11.load_store("Reply Queue").get("done") or {}
+    users = _j(os.path.join(r, "users.json"), {})
+    rep = [i for i in items if i in rto]
+    lk = [i for i in items if i not in rto and i in likes]
+    def marked(i):
+        who = (users.get(ev[i].get("author")) or {}).get("username") or ""
+        return i in done or (who and v11._h(who) in done)
+    mk = [i for i in items if i not in rto and i not in likes and marked(i)]
+    return {"items": len(items), "replied": len(rep), "liked": len(lk), "marked": len(mk), "done": len(rep) + len(lk) + len(mk)}
+
+
+def shoutouts_week(days=7):
+    """Shoutouts counted from your own posts: a post (not the auto @prefix of a reply) that says "shoutout" and tags an
+    @handle. Goal is the owner's `weekly_goal` in Shoutout Picker's config (None = not set). Unused = this week's
+    picks not tagged in any of those posts. None when Shoutout Picker isn't installed."""
+    if "Shoutout Picker" not in v11.installed():
+        return None
+    posts, tagged = [], set()
+    for k, v in sorted(_recent(_own_posts(), days).items()):
+        t = v.get("text") or ""
+        if v.get("kind") == "reply":
+            t = re.sub(r"^(@\w+\s+)+", "", t)
+        tags = re.findall(r"(?<!\w)@(\w{1,15})", t)
+        if "shoutout" in t.lower() and tags:
+            posts.append(k); tagged |= {x.lower() for x in tags}
+    picks = _j(os.path.join(root("Shoutout Picker"), "queue.json"), [])
+    picks = [p.get("username") for p in picks if isinstance(p, dict) and p.get("username")] if isinstance(picks, list) else []
+    goal = _cfg("Shoutout Picker").get("weekly_goal")
+    return {"posts": len(posts), "goal": goal if isinstance(goal, int) and goal > 0 else None,
+            "unused": [h for h in picks if h.lower() not in tagged]}
+
+
 def reruns_used(days=7):
-    """Your own older posts you quoted or reposted in the last `days` days (from Rerun Picker's posts.json),
-    plus any marked done in chat. None when Rerun Picker isn't installed."""
+    """Picks from the newest Rerun Picker picks file (picks_YYYY-MM-DD.csv, no .bak/.orig copies) that you quoted,
+    reposted, reused the media of, or marked Done. Returns (used, picked) or None when Rerun Picker isn't installed."""
     if "Rerun Picker" not in v11.installed():
         return None
-    posts = _j(os.path.join(root("Rerun Picker"), "posts.json"), {})
-    posts = posts if isinstance(posts, dict) else {}
-    cut = datetime.now(v11.UTC) - timedelta(days=days)
-    n = sum(1 for p in posts.values() if isinstance(p, dict) and (p.get("quoted") or p.get("reposted")) in posts
-            and (_ts(p.get("created") or "") or cut) > cut)
-    return n + (done_since("Rerun Picker", days) or 0)
+    r = root("Rerun Picker")
+    files = sorted(f for f in os.listdir(os.path.join(r, "picks")) if re.fullmatch(r"picks_\d{4}-\d{2}-\d{2}\.csv", f)) \
+        if os.path.isdir(os.path.join(r, "picks")) else []
+    if not files:
+        return (0, 0)
+    rows = _csv(os.path.join(r, "picks", files[-1]))
+    posts = _own_posts()
+    recent = _recent(posts, days)
+    done = v11.load_store("Rerun Picker").get("done") or {}
+    used = 0
+    for row in rows:
+        url = row.get("post_url") or ""
+        pid = url.rstrip("/").rsplit("/", 1)[-1]
+        mk = set((posts.get(pid) or {}).get("media_keys") or [])
+        hit = any(v.get("quoted") == pid or v.get("reposted") == pid or (mk and mk & set(v.get("media_keys") or []))
+                  for k, v in recent.items() if k != pid)
+        if hit or url in done or pid in done:
+            used += 1
+    return (used, len(rows))
+

@@ -95,7 +95,7 @@ DEFAULT_CONFIG = {
     "timezone": None,
 }
 
-TWEET_FIELDS = "created_at,public_metrics,conversation_id,referenced_tweets,in_reply_to_user_id,author_id,lang"
+TWEET_FIELDS = "created_at,public_metrics,conversation_id,referenced_tweets,in_reply_to_user_id,author_id,lang,possibly_sensitive"
 
 OPTIONAL_NONE = set()
 
@@ -297,6 +297,7 @@ def cmd_pull(st, fw, client, trial=False):
         kind = "reply" if replied else ("quote" if quoted else "original")
         posts[t["id"]] = {"created": t.get("created_at"), "kind": kind, "text": (t.get("text") or "")[:200],
                           "replied_to": replied, "quoted": quoted,
+                          "in_reply_to_user_id": t.get("in_reply_to_user_id"),
                           "metrics": t.get("public_metrics") or {},
                           "likers_fetched": posts.get(t["id"], {}).get("likers_fetched", False),
                           "quotes_checked": posts.get(t["id"], {}).get("quotes_checked")}
@@ -327,7 +328,8 @@ def cmd_pull(st, fw, client, trial=False):
         kind = "reply" if replied and replied in posts else ("quote" if ref(t, "quoted") in posts else "mention")
         events[t["id"]] = {"kind": kind, "author": t.get("author_id"), "created": t.get("created_at"),
                            "text": (t.get("text") or "")[:280], "target": replied or ref(t, "quoted"),
-                           "conversation": t.get("conversation_id")}
+                           "conversation": t.get("conversation_id"),
+                           "sensitive": bool(t.get("possibly_sensitive"))}
     if ments:
         state["mention_since"] = max(ments, key=lambda t: int(t["id"]))["id"]
 
@@ -358,7 +360,8 @@ def cmd_pull(st, fw, client, trial=False):
                 continue
             events[t["id"]] = {"kind": "quote", "author": t.get("author_id"), "created": t.get("created_at"),
                                "text": (t.get("text") or "")[:280], "target": pid,
-                               "conversation": t.get("conversation_id")}
+                               "conversation": t.get("conversation_id"),
+                           "sensitive": bool(t.get("possibly_sensitive"))}
 
     # 4b. what I've liked, read after mentions and quotes so a tight cap still
     # gets the items. If this doesn't finish, the radar keeps the items and marks them

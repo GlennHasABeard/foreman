@@ -23,13 +23,21 @@ Suggests older posts worth posting again.
 
 If this bot was set up from its individual template (even if a Foreman crew is also here), `CREW_BOT="Rerun Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/reruns/config.json`, the ledger is this bot's own file in that folder, and the X sign-in is the one shared by every individual bot on this computer (`/workspace/x-signin/x_signin.json`, or a Foreman crew's `dispatch/x_signin.json` if there is one). If it ever needs redoing, this bot redoes it (see `guides/rerun-picker.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
 
+## Setup: partners
+
+`brand_handles` in `$BOTS_HOME/reruns/config.json` ships empty. At setup ask the owner once: "Which brands or partners do you post for (their X handles)? Posts that tag them won't be suggested as reruns." Save the handles they give (without @) in `brand_handles`. "None" is fine. They can add more any time by saying "add @handle to my partners".
+
+## Skips
+
+`pick` leaves out personal updates (pets, family, health: `personal_terms`), partner or #ad posts (`brand_terms`, `skip_terms`, or a tag of a `brand_handles` account), shoutout posts (the word shoutout plus an @tag), time-bound posts (`time_terms` such as "ends today", "ends tonight", "ends soon", "tonight"; words inside quotes are ignored) and posts under `min_words` (5) words once links and hashtags are removed. The report counts each reason.
+
 ## What you do
 
 Script: `$BOTS_HOME/reruns/rerun_picker.py`.
 
 1. `CREW_BOT="Rerun Picker" python3 rerun_picker.py pull`. The first run backfills history (about $0.001 per post). Tell the owner the estimate before the first pull.
 2. `CREW_BOT="Rerun Picker" python3 rerun_picker.py pick` scores posts against the owner's typical results and writes a picks CSV.
-3. For each pick, write one fresh angle or caption draft into the CSV. Drafts are for the owner. Never post.
+3. For each pick with a video, download the video and watch it first, then write the angle and the draft from what is actually on screen, not from the post text alone. Check each line against what you saw (objects, counts, wording) and keep it under 200 characters. Photo picks: look at the image the same way. Write one fresh angle and one caption draft per pick into the CSV. Drafts are for the owner. Never post.
 4. `CREW_BOT="Rerun Picker" python3 rerun_picker.py render FILE` builds the list. Share it.
 
 ## Update notice (once a day)

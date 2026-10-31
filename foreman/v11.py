@@ -157,10 +157,44 @@ CMDS = [
 ]
 
 
+GAME_CMD = re.compile(r"^\s*(not like @?\w{1,15}\s+because\s+.+|undo rule\s+.+|already following @?\w{1,15}\s*)$", re.I | re.S)
+
+
+def game_chat(text):
+    """Follow Finder Game commands: not like, undo rule, already following. $0, no X calls."""
+    g = os.path.join(os.environ.get("BOTS_HOME", "/workspace").rstrip("/"), "creator-scout", "game")
+    if not os.path.exists(os.path.join(g, "game_tab.py")):
+        return "Follow Finder is not installed, so there is no Game to update."
+    import subprocess
+    r = subprocess.run([sys.executable, "game_tab.py", "chat", text.strip()], cwd=g, capture_output=True, text=True)
+    return (r.stdout or r.stderr).strip() or "Game command ran."
+
+
+def set_shoutout_goal(n):
+    """Weekly shoutout goal for Your week, saved in Shoutout Picker's config.json as weekly_goal. 0 clears it."""
+    import v11_wire as w
+    if "Shoutout Picker" not in installed():
+        return "Shoutout Picker is not installed."
+    p = os.path.join(w.root("Shoutout Picker"), "config.json")
+    try:
+        c = json.load(open(p, encoding="utf-8"))
+    except (OSError, ValueError):
+        c = {}
+    c["weekly_goal"] = n or None
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(c, f, indent=2)
+    return f"Weekly shoutout goal set to {n}." if n else "Weekly shoutout goal cleared."
+
+
 def handle(text, name=None, post_times=None):
     """Run one chat command. Returns the reply line, or None if the text is not a command.
     Saves to the bot's own data/chat_store.json. Hosted pages save the same marks in KV;
     `merge_kv` folds those in so both ways agree."""
+    if GAME_CMD.match(text or ""):
+        return game_chat(text)
+    g = re.match(r"^\s*shoutout goal (\d{1,2})\s*$", text or "", re.I)
+    if g:
+        return set_shoutout_goal(int(g.group(1)))
     s = load_store(name)
     t = now().isoformat(timespec="seconds")
     for rx, kind in CMDS:

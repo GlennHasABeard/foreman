@@ -92,7 +92,7 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 Get the Foreman template: [Foreman](https://x.ai/bot/Hfm0xbUx8FqPTd5EYvjat)
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.1.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.1.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.1.0` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.1.1` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.1.1, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.1.1` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -129,7 +129,7 @@ Each of the seven bots is also its own template. Open the bot's template link be
 - [Rerun Picker](https://x.ai/bot/M2jbahUCQCsNqdgGxAIj2)
 - [Analytics Log](https://x.ai/bot/TuAu34Lz2_zupuT5qlai3)
 
-The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.1.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.1.1 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
 
 What's new in v1.1 for individual templates (each template's release notes list only what it got, see PATCH-NOTES.md):
 
@@ -137,6 +137,15 @@ What's new in v1.1 for individual templates (each template's release notes list 
 - One hosted bot: its own page is its home. Follow-ups and status show there. Two or more hosted: Home shows panels only for the bots installed.
 - Spend: each template keeps its own cap, month forecast and weekly cost digest. Estimate next to what X billed needs console.x.com signed in in the bot's browser. Without it, spend shows as labeled estimates and setup says once how to turn on the billed check.
 - Shared: update notice, attached profiles at $0, refused reads say so (never a quiet 0), sign-in check after a box restore, shared publish cache with OK/failed log, short chat reports with the page link, light and dark pages with real buttons and Last updated, a shared profile cache when more than one bot is here, and suggested run times 20 minutes apart.
+
+What's new in v1.1.1 (full notes in CHANGELOG.md):
+
+- Follow Finder: Game tab, off by default (say "turn on Game"). Picks matched by X user ID with every filter run again after each swap, a hard NSFW filter plus X's sensitive flag, and an Already following button. An optional image check, off by default, shows its cost before it runs. Chat: `not like @name because ...`, `undo rule ...`, `already following @name`.
+- Reply Queue: the Reply button and draft box are gone (Like, Open and Done stay). Compact embeds that load as you scroll, Show context, sensitive posts behind Tap to show. Window stays 72 hours.
+- Rerun Picker: skips personal, partner or #ad, shoutout, very short and time-bound posts. Setup asks for your partners (the list ships empty). Drafts are written after watching the video.
+- Your week and Home: replies handled split into replied, liked and Done, shoutouts against a weekly goal (`shoutout goal N`) with unused picks, reruns used from the newest picks file, and "X billing days, UTC" under spend.
+- Analytics Log: 500K leave-window card, and payout and video lists copied only when they change.
+- Pages use only X's official embed widget.
 
 How an individual template handles money and sign-in:
 
@@ -148,7 +157,7 @@ How an individual template handles money and sign-in:
 | Bot | Files (inside foreman/) | Secrets | X scopes | Browser | Works with |
 |---|---|---|---|---|---|
 | Follow Audit | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `follow-audit/instructions.md`, `follow-audit/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | nothing else |
-| Follow Finder | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `follow-finder/creator_scout.py`, `follow-finder/instructions.md`, `follow-finder/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | follow-audit (optional, for follows-you marks) |
+| Follow Finder | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `follow-finder/creator_scout.py`, `follow-finder/instructions.md`, `follow-finder/routine.json`, `follow-finder/game/` (Game tab, off by default) | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | follow-audit (optional, for follows-you marks) |
 | Shoutout Picker | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `shoutout-picker/shoutout_desk.py`, `shoutout-picker/instructions.md`, `shoutout-picker/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access | no | follow-audit (optional, or its own follower scan) |
 | Reply Queue | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `reply-queue/engagement.py`, `reply-queue/instructions.md`, `reply-queue/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access, like.read | no | nothing else |
 | Fan Finder | `follow-audit/follow_watch.py`, `follow-audit/x_prices.py`, `follow-audit/bot_spend.py`, `reply-queue/engagement.py`, `fan-finder/instructions.md`, `fan-finder/routine.json` | X_CLIENT_ID, X_CLIENT_SECRET | tweet.read, users.read, follows.read, offline.access, like.read | no | reply-queue (optional, reuses its pull) |
@@ -175,4 +184,4 @@ Bot by bot notes:
 
 ## License
 
-MIT License. Copyright (c) 2026 Glenn Williams. See `LICENSE`.
+MIT License. See `LICENSE`.

@@ -471,8 +471,7 @@ def build(out_dir):
         r, rw = rarity_rel(c, fnames, cut); bp = best_post(c)
         return dict(checked=nsfw.checked(c["username"]), h=c["username"], uid=uid_of(c["username"]), name=c.get("name"), avatar=c.get("avatar"), followers=c.get("followers"),
                     rarity=r, why=rw if r != "Common" else why_line(c, rw), styles=style_tags(c),
-                    post=dict(id=bp["id"], text=bp.get("text"), likes=bp.get("likes"), created=bp.get("created")) if bp else None,
-                    caveats=[])
+                    post=dict(id=bp["id"], text=bp.get("text"), likes=bp.get("likes"), created=bp.get("created")) if bp else None)
     if d not in st["packs"]:
         pack = []
         sd = saved_days(); allp = [c for v in sd.values() for c in v] or picks
@@ -490,8 +489,6 @@ def build(out_dir):
         st["packs"][d] = [c["h"] for c in pack]
     for h in [h for h in st["binder"] if h in nb or nsfw.check(h)]: st["binder"].pop(h)
     for h, b in st["binder"].items(): b["checked"] = nsfw.checked(h)
-    # caveats from unreliable active rules
-    weak = [r for r in active if not r.get("reliable") and r.get("chip")]  # partial filters only
     # taste deck: today's pool not in pack and not already judged
     judged = set(st["taste"])
     deck = [dict(k=c["username"].lower(), text=(best_post(c) or {}).get("text", ""), blind=blind_text((best_post(c) or {}).get("text", "")), id=(best_post(c) or {}).get("id"),
@@ -529,10 +526,15 @@ def build(out_dir):
         rules_out.append(dict(id=r["id"], what=r["what"], chip=r.get("chip"), free=r.get("free"),
                               reliable=r.get("reliable"), note=r.get("note"), active=r.get("active"),
                               from_handle=r.get("from_handle"), created=r["created"][:10], blocked_week=n))
-    pack_cards = [dict(st["binder"][h.lower()], uid=uid_of(h), caveats=[r["note"] for r in weak if r.get("note")]) for h in st["packs"][d]]
+    def shown(card, **extra):
+        """Pack and spare cards. Rule notes stay on Rules learned, not on these cards."""
+        c = dict(card, **extra)
+        c.pop("caveats", None)
+        return c
+    pack_cards = [shown(st["binder"][h.lower()], uid=uid_of(h)) for h in st["packs"][d]]
     inpack = {h.lower() for h in st["packs"][d]}
     # spares for the "Already following" button: same final gate, best-scored first
-    spares = [dict(mk(c), caveats=[r["note"] for r in weak if r.get("note")]) for c in gated_fill([c for c in pool if c["username"].lower() not in inpack], ctx, 10)]
+    spares = [shown(mk(c)) for c in gated_fill([c for c in pool if c["username"].lower() not in inpack], ctx, 10)]
     game = dict(date=d, built=now().isoformat(timespec="seconds"), kv=kv_note, follow_list=fw_run,
                 pack=pack_cards, spares=spares, deck=deck, gate_redraw=gate_log,
                 already_following=sorted(v["h"] for v in af.values()),

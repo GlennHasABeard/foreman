@@ -1,6 +1,6 @@
 # Shoutout Picker alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.1 --bot shoutout-picker` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot shoutout-picker` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `shoutout-picker/shoutout_desk.py` into `$BOTS_HOME/shoutouts`. Scripts only, never a sign-in or token file.
@@ -11,7 +11,7 @@ Ask only these and save them in `$BOTS_HOME/shoutouts/config.json`: `account_kin
 ## Shoutout Picker notes
 Shoutout Picker needs a follower list. If Follow Audit is installed (`$BOTS_HOME/follow-watch/data/state.json` exists), use it. If not, offer two choices and let the owner pick:
 - Its own follower scan. Show the cost first from the free account read (about $0.65 to $1.00 per 1,000 followers plus following). If it does not fit the cap, offer the one-day raise. Then write `$BOTS_HOME/follow-watch/config.json` (inactive_days and dormant_days, with defaults the owner agrees to) and run `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/follow_watch.py full`. It is booked to Shoutout Picker.
-- Install Follow Audit (`sh fetch_release.sh v1.1.1 --bot follow-audit`), which keeps the list fresh every day.
+- Install Follow Audit (`sh fetch_release.sh v1.1.2 --bot follow-audit`), which keeps the list fresh every day.
 
 ## Cap and ledger
 Run `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py individual`. It marks this bot as set up from its individual template, so it keeps its own cap and ledger even if a Foreman crew lives in this `$BOTS_HOME`, and prints the mode.

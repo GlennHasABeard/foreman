@@ -75,7 +75,7 @@ function pts(){var s=G.score;return '<div class="gstrip"><div><b>'+s.streak+' da
 function card(c){var n=S.never[c.h.toLowerCase()],p=c.post;
  return '<div class="gc '+c.rarity+'"><div class="gr">'+c.rarity+'</div><div class="gtop"><img'+(c.checked===false?' class="cov"':'')+' src="'+esc(c.avatar)+'" alt="" onerror="this.style.visibility=\'hidden\'"><div><b>@'+esc(c.h)+'</b><div class="gwhy">'+esc(c.name)+' · '+(c.followers||0).toLocaleString()+' followers</div></div></div>'+
  (p?emb(p,c.h,c.checked!==false):'')+
- '<div class="gwhy">'+esc(c.why)+'</div>'+(c.caveats||[]).map(function(x){return '<div class="gcav">'+esc(x)+'</div>'}).join("")+
+ '<div class="gwhy">'+esc(c.why)+'</div>'+
  (n?'<div class="gcav">On your never-scout list</div>':'')+
  '<div class="gbtns"><a class="gb p" target="_blank" rel="noopener" href="https://x.com/'+encodeURIComponent(c.h)+(p?'/status/'+p.id:'')+'" data-open="'+esc(c.h)+'">Open on X</a><button class="gb" data-nl="'+esc(c.h)+'">Not like this</button>'+(c.spare===undefined?'':'<button class="gb" data-af="'+esc(c.h)+'" data-uid="'+esc(c.uid||"")+'">Already following</button>')+'</div></div>'}
 function packNow(){var af=S.af,out=[],seen={};function ok(c){var k=c.h.toLowerCase();return !(af[k]&&!af[k].undone)&&!seen[k]}
@@ -135,7 +135,7 @@ var WEAK={"reposts other people's work":1,"low effort or spammy ai":1};
 function why(h,pre){var sel={};
  sheet.innerHTML='<div class="gsec" style="margin-top:0">Why not creators like @'+esc(h)+'?</div><p class="gsub">Pick any that fit. Each one becomes a rule.</p><div class="gchips">'+G.chips.map(function(c){return '<button data-c="'+esc(c)+'">'+esc(({"nsfw":"NSFW","low effort or spammy ai":"Low effort or spammy AI"})[c]||c.charAt(0).toUpperCase()+c.slice(1))+'</button>'}).join("")+'</div><textarea placeholder="Or say it in your words, e.g. no posts about &quot;crypto&quot;"></textarea><div class="gnote" id="gw"></div><div class="gbtns" style="margin-top:10px"><button class="gb p" data-s>Save rules</button><button class="gb" data-x>Cancel</button></div>';
  mod.classList.add("on");var gw=sheet.querySelector("#gw");
- function note(){var w=Object.keys(sel).filter(function(c){return WEAK[c]});gw.textContent=(sel.nsfw?"NSFW also adds @"+h+" to never-scout. ":"")+(w.length?"Heads up: "+w.join(", ")+" can only be partly checked from saved data. The card will say so.":"")}
+ function note(){var w=Object.keys(sel).filter(function(c){return WEAK[c]});gw.textContent=(sel.nsfw?"NSFW also adds @"+h+" to never-scout. ":"")+(w.length?"Heads up: "+w.join(", ")+" can only be partly checked from saved data. Rules learned will say so.":"")}
  sheet.onclick=function(e){var c=e.target.closest("[data-c]");if(c){var k=c.dataset.c;if(sel[k])delete sel[k];else sel[k]=1;c.classList.toggle("on");note();return}
   if(e.target.closest("[data-x]")){close();return}
   if(e.target.closest("[data-s]")){var now=new Date().toISOString(),n=0,txt=sheet.querySelector("textarea").value.trim();

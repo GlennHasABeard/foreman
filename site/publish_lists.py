@@ -696,7 +696,8 @@ def v11_render(w):
             if dt is not None:
                 if n == "Reply Queue":
                     gone = {h.lower() for h in list(st.get("done") or {}) + list(st.get("never") or {})}
-                    pb = P.home_reply_queue([x for x in dt if (x.get("username") or "").lower() not in gone])
+                    pb = P.home_reply_queue([x for x in dt if (x.get("username") or "").lower() not in gone],
+                                            marks=P.store_to_marks(st))
                 elif n == "Fan Finder":
                     pb = P.home_fan_finder([x for x in dt if (x.get("username") or "").lower() not in {h.lower() for h in st.get("never") or {}}])
                 elif n == "Shoutout Picker":

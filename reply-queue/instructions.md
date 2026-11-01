@@ -63,3 +63,6 @@ Once a day (from the Update check routine if the owner has one, otherwise the fi
   - `show me everything from @name` shows the per-person timeline and notes
   - `follow up @name on YYYY-MM-DD` sets a follow-up that shows on Home, on this bot's own page if it is the only hosted bot, or in chat if not hosted
   - `mark @name done` marks an item answered. `median` gives median time to reply over 7 and 30 days from those done marks, chat or page
+
+## Home (v1.1.2)
+When Home is showing (two or more hosted bots), each Reply Queue panel item has Like, Open and Mark done. Mark done becomes Done ✓ and writes the same done marks as this bot's page, with undo.

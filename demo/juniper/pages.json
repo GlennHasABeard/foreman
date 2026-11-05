@@ -1,0 +1,231 @@
+{
+  "reply-queue": [
+    {
+      "key": "1001",
+      "username": "moss_demo",
+      "chips": [
+        {
+          "t": "reply"
+        },
+        {
+          "t": "question"
+        }
+      ],
+      "text": "How do you keep the sky from going muddy? Demo data.",
+      "links": [
+        {
+          "t": "Open and reply",
+          "u": "https://x.com/moss_demo/status/1001"
+        }
+      ],
+      "question": true,
+      "new": true,
+      "g": "Everyone else"
+    },
+    {
+      "key": "1002",
+      "username": "inkwash_demo",
+      "chips": [
+        {
+          "t": "mention"
+        }
+      ],
+      "text": "Saved this river study. Demo data.",
+      "links": [
+        {
+          "t": "Open and reply",
+          "u": "https://x.com/inkwash_demo/status/1002"
+        }
+      ],
+      "question": false,
+      "new": false,
+      "g": "Everyone else"
+    }
+  ],
+  "fan-finder": {
+    "rows": [
+      {
+        "key": "2001",
+        "username": "cedar_demo",
+        "chips": [
+          {
+            "t": "1,200 followers"
+          },
+          {
+            "t": "verified"
+          },
+          {
+            "t": "3 replies"
+          }
+        ],
+        "text": "Paints weather. Demo data.",
+        "links": [
+          {
+            "t": "Their reply",
+            "u": "https://x.com/cedar_demo/status/2001"
+          }
+        ]
+      }
+    ],
+    "backlog": "18 people still engaging who don't follow you yet (+3 vs last week)"
+  },
+  "follow-finder": [
+    {
+      "username": "wash00_demo",
+      "name": "Demo painter 0",
+      "followers": 800,
+      "bio": "Watercolor sketchbook. Demo data.",
+      "follows_you": false,
+      "top_posts": [
+        {
+          "id": "1800000000000000000",
+          "text": "A river study in two washes. Demo data.",
+          "points": 4000,
+          "likes": 900,
+          "created": "2026-11-01"
+        }
+      ],
+      "rarity": "Legendary",
+      "why": "Hidden gem: in your niche, you don't follow them, and nobody you follow is tagged in their bio"
+    },
+    {
+      "username": "wash01_demo",
+      "name": "Demo painter 1",
+      "followers": 1500,
+      "bio": "Watercolor sketchbook. Demo data.",
+      "follows_you": false,
+      "top_posts": [
+        {
+          "id": "1800000000000000001",
+          "text": "A river study in two washes. Demo data.",
+          "points": 400,
+          "likes": 80,
+          "created": "2026-11-01"
+        }
+      ],
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers"
+    },
+    {
+      "username": "wash02_demo",
+      "name": "Demo painter 2",
+      "followers": 1500,
+      "bio": "Watercolor sketchbook. Demo data.",
+      "follows_you": false,
+      "top_posts": [
+        {
+          "id": "1800000000000000002",
+          "text": "A river study in two washes. Demo data.",
+          "points": 400,
+          "likes": 80,
+          "created": "2026-11-01"
+        }
+      ],
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers"
+    },
+    {
+      "username": "wash20_demo",
+      "name": "Demo painter 20",
+      "followers": 2200,
+      "bio": "Watercolor sketchbook. Demo data.",
+      "follows_you": false,
+      "top_posts": [
+        {
+          "id": "1800000000000000020",
+          "text": "A river study in two washes. Demo data.",
+          "points": 20,
+          "likes": 4,
+          "created": "2026-11-01"
+        }
+      ],
+      "rarity": "Common",
+      "why": "A solid fit near your size"
+    }
+  ],
+  "shoutout-picker": [
+    {
+      "username": "linen_demo",
+      "followers": 1800,
+      "label": "painters",
+      "weeks_listed": 1,
+      "week_label": "week 1 · new",
+      "note": "Demo data."
+    },
+    {
+      "username": "ochre_demo",
+      "followers": 900,
+      "label": "painters",
+      "weeks_listed": 3,
+      "week_label": "week 3",
+      "note": ""
+    }
+  ],
+  "rerun-picker": [
+    {
+      "url": "https://x.com/junipervale_demo/status/3001",
+      "date": "2026-09-12",
+      "format": "photo",
+      "views": 4200,
+      "ratio": "3.2x",
+      "last": "never",
+      "text": "Three-layer river wash. Demo data.",
+      "angle": "Show the second wash only."
+    }
+  ],
+  "follow-audit": {
+    "stats": [
+      [
+        "followers",
+        "2,400"
+      ],
+      [
+        "following",
+        "310"
+      ]
+    ],
+    "since": [
+      {
+        "e": "unfollowed_you",
+        "u": "pebble_demo",
+        "d": "2026-11-04",
+        "note": "12 days"
+      },
+      {
+        "e": "gone",
+        "u": "faded_demo",
+        "d": "2026-11-03",
+        "note": "suspended"
+      }
+    ],
+    "bad": [],
+    "quiet": []
+  },
+  "analytics-log": {
+    "verified": [
+      {
+        "date": "2026-08-07",
+        "impressions": "1200"
+      },
+      {
+        "date": "2026-08-08",
+        "impressions": "800"
+      }
+    ],
+    "tracker": [
+      {
+        "value": "40000",
+        "pulled_at_et": "2026-11-05T15:00:00"
+      }
+    ],
+    "posts": [],
+    "followers": [
+      {
+        "followers_total": "2400"
+      }
+    ]
+  },
+  "home": {
+    "backlog": "18 people still engaging who don't follow you yet (+3 vs last week)"
+  }
+}

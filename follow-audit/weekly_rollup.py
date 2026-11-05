@@ -100,3 +100,64 @@ def sunday_rollup(events, today, weekday=6, days=7, enabled=True, pending_unname
             lines.append(f"@{who}: followed you for {followed} days")
     lines.append(f"Pending unnamed: {pending}.")
     return {"named": named, "pending_unnamed": pending, "text": "\n".join(lines)}
+
+
+def refile_gone(accounts):
+    """Saved data only. Accounts already marked gone leave the live follow lists.
+
+    Returns the handles that were still flagged as following or followed until this pass.
+    No X call.
+    """
+    moved = []
+    for key, acc in (accounts or {}).items():
+        if not isinstance(acc, dict) or not acc.get("gone"):
+            continue
+        if acc.get("follower_now") or acc.get("following_now"):
+            acc["follower_now"] = False
+            acc["following_now"] = False
+            user = acc.get("user") or {}
+            moved.append(user.get("username") or str(key))
+    return moved
+
+
+def daily_summary(light):
+    """The daily check's summary lines. Headline text is used as already computed."""
+    light = light or {}
+    headline = light.get("headline")
+    if not headline:
+        headline = str(light.get("new_followers") or 0)
+    lines = [f"Daily summary: {headline} new followers."]
+    lines.append(f"New follows by you: {int(light.get('new_follows') or 0)}.")
+    if light.get("est_unfollows") is not None:
+        lines.append(f"Unfollows since last check: about {light['est_unfollows']} (count only).")
+    if light.get("skipped_newest"):
+        lines.append("Newest-followers read skipped. The estimate was at or under the threshold.")
+    if light.get("replay"):
+        lines.append(light["replay"])
+    return lines
+
+
+def run_cost_line(records, est_cost, est_cost_raw=None):
+    """One run-cost line. When the display estimate is scaled, the unscaled figure stays visible.
+
+    Spend caps use the unscaled rates either way.
+    """
+    records = int(records or 0)
+    est_cost = float(est_cost or 0)
+    if est_cost_raw is not None and abs(est_cost - float(est_cost_raw)) > 0.005:
+        return (f"Run cost: {records:,} records read, about ${est_cost:.2f} "
+                f"(unscaled ${float(est_cost_raw):.2f}). Spend caps use the unscaled rates.")
+    return f"Run cost: {records:,} records read, about ${est_cost:.2f}."
+
+
+def cached_read(cache, key, fetch):
+    """Reuse a page already read in this run. fetch() runs only on a miss.
+
+    n55 cannot tell which copy of a function is newer. This only avoids a second read
+    inside one run.
+    """
+    if key in cache:
+        return list(cache[key]), True
+    page = list(fetch() or [])
+    cache[key] = page
+    return page, False

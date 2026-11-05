@@ -814,6 +814,13 @@ def cmd_finish(p, folder):
             if name in CHANGED_ONLY_FILES and wstate.get("hash:" + name):
                 items[name] = "not re-copied (unchanged), saved copy kept"
                 return None
+            # A missing verified-impressions export is not a zero. Keep the last saved file.
+            if name in ("verified_90d.csv", "overview_verified_14d.csv"):
+                saved = read_csv(p.d("verified_daily_latest.csv"))
+                if saved:
+                    items[name] = "missing, last saved verified impressions kept"
+                    flags.append(f"{name} missing. Last saved verified impressions kept. Not counted as zero.")
+                    return None
             items[name] = "missing"
             if name not in OPTIONAL_FILES:
                 flags.append(f"{name} missing")

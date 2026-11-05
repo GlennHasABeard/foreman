@@ -32,6 +32,20 @@ v1.2.0 prep ports the items below into the template pack. Nothing here is tagged
 - n49 capped-pull line. n38 replies scorecard **off**.
 - Warm Leads `leads_expire_days` default 30.
 
+## n55 gaps ported after the first prep commit
+
+The diff cannot tell which side is newer. These were the live behaviors the template was still missing:
+
+- Reply Queue pull reads the owner's likes, writes a coverage block, and leads a cap stop with the capped-pull line.
+- Radar marks items already liked. `apply_trial` and `log_trial` are generic cap helpers.
+- Fan Finder tracks every qualified lead in `leads_seen.json`. The backlog line stays "N people still engaging who don't follow you yet (±D vs last week)". `leads_expire_days` stays 30.
+- Follow Audit reuses a page already read in the run (`list_first`), `refile-gone` uses saved data only, the report section is Account gone, and the daily check has a summary plus a run-cost line.
+- A missing verified-impressions export is not zero. The last saved file is kept when one exists.
+
+## Demo
+
+`site/demo_juniper.py` builds the Juniper Vale demo under `demo/juniper/`. Regenerate with `python3 site/demo_juniper.py`.
+
 ## Not ported
 
 - n51 Home free-credit Spend UI.

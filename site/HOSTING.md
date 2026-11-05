@@ -12,6 +12,8 @@ Lists can be hosted on Cloudflare for free so each list has a stable private lin
 6. Write `site/site.env` with `PAGES_PROJECT`, `LISTS_URL` and `KV_NAMESPACE_TITLE` (no secrets in this file).
 7. Test locally first: `python3 publish_lists.py --dry-run`, then open `site/public/index.html`.
 
+Screenshot fixture, no network: `python3 site/demo_juniper.py` writes `demo/juniper/` for Juniper Vale (`@junipervale_demo`). It does not create the Game LIVE flag.
+
 The look is one plain black and white template with system fonts. Page scripts kept: hide checked rows, sync checks (KV), a Lists menu to move between lists, and Never show on Follow Finder.
 
 ## v1.1

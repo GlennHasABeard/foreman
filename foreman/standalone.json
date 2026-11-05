@@ -33,7 +33,13 @@
         "follow-audit/weekly_rollup.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -84,7 +90,13 @@
         "follow-finder/qol_scout.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -130,7 +142,13 @@
         "shoutout-picker/qol_desk.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -176,7 +194,13 @@
         "reply-queue/qol_leads.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -221,7 +245,13 @@
         "reply-queue/qol_leads.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -268,7 +298,13 @@
         "rerun-picker/qol_rerun.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -309,7 +345,13 @@
         "analytics-log/replies_scorecard.py",
         "site/radar_collapse.py",
         "site/qol7_medrt.py",
-        "site/qol7_due.py"
+        "site/qol7_due.py",
+        "site/demo_juniper.py",
+        "demo/juniper/README.md",
+        "demo/juniper/profile.json",
+        "demo/juniper/pages.json",
+        "demo/juniper/marks.json",
+        "demo/juniper/game.json"
       ],
       "secrets": [],
       "x_scopes": [],

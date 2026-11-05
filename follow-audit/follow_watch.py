@@ -565,6 +565,7 @@ class XClient:
         self.owner_id = read_owner_id()  # your account id, so reads of your own data bill as owned
         self._booked = 0.0
         self._charged = 0.0
+        self._read_cache = {}  # (uid, kind) -> users already read this run
         import atexit
         atexit.register(self._book)
 
@@ -747,6 +748,7 @@ class XClient:
             body = self.get(f"/users/{uid}/{kind}", params)
             page = body.get("data", []) or []
             self.meter.add("owned", len(page))
+            self._read_cache.setdefault((str(uid), kind), []).extend(page)
             users.extend(page)
             token = (body.get("meta") or {}).get("next_token")
             if limit and len(users) >= limit:
@@ -764,6 +766,7 @@ class XClient:
             body = self.get(f"/users/{uid}/{kind}", params)
             page = body.get("data", []) or []
             self.meter.add("owned", len(page))
+            self._read_cache.setdefault((str(uid), kind), []).extend(page)
             for u in page:
                 if u["id"] in known_ids:
                     streak += 1
@@ -776,6 +779,23 @@ class XClient:
             if not token:
                 return fresh, True
         return fresh, False
+
+    def list_first(self, uid, kind, page_size=100):
+        """The first page of a list. Reuses users already read this run. No second request then.
+
+        Returns (users, reused).
+        """
+        import weekly_rollup
+        key = (str(uid), kind)
+
+        def fetch():
+            params = {"max_results": page_size, "user.fields": USER_FIELDS}
+            body = self.get(f"/users/{uid}/{kind}", params)
+            page = body.get("data", []) or []
+            self.meter.add("owned", len(page))
+            return page
+
+        return weekly_rollup.cached_read(self._read_cache, key, fetch)
 
     def recent_posts(self, uid, start_time):
         """Newest posts (replies and reposts included) since start_time. Goes through the cap like
@@ -1298,7 +1318,7 @@ def build_full_report(store, cfg, state, now, meter, first):
               f"- Followed you back: {len(fb)}{avg}",
               f"- New mutuals from both sides at once: {len(by.get('new_mutual', []))}",
               f"- Unfollowed you: {len(by.get('unfollowed_you', []))}",
-              f"- Gone (suspended or deactivated): {len(by.get('gone', []))}",
+              f"- Account gone (suspended or deactivated): {len(by.get('gone', []))}",
               f"- You followed: {len(by.get('you_followed', []))}",
               f"- You unfollowed: {len(by.get('you_unfollowed', []))}", ""]
         if rollup:
@@ -1342,7 +1362,9 @@ def build_full_report(store, cfg, state, now, meter, first):
 
         gone = by.get("gone", [])
         if gone:
-            L += ["## Gone", "", md_table(["Account", "Status"], [[f"@{e['username']}", e["detail"]] for e in gone]), ""]
+            L += ["## Account gone", "",
+                  "Suspended, deactivated or not found, from this bot's own per-name lookup.", "",
+                  md_table(["Account", "Status"], [[f"@{e['username']}", e["detail"]] for e in gone]), ""]
 
     # not following back
     nfb_rows = []
@@ -1420,9 +1442,10 @@ def build_full_report(store, cfg, state, now, meter, first):
                            [[f"[@{r['username']}]({r['url']})", r["score"], r["tags"],
                              "; ".join(x for x in (r["reasons"], r["spam_matches"]) if x)] for r in top]), ""]
 
+    import weekly_rollup
+    scaled = x_prices.counts(owned=meter.owned, post=meter.posts, user=meter.lookup)
     L += ["## Run cost", "",
-          f"Read {meter.owned:,} follower and following records and {meter.lookup:,} profile lookups. "
-          f"Estimated ${meter.cost():.2f} at the rates in x_prices.py. "
+          weekly_rollup.run_cost_line(meter.owned + meter.lookup + meter.posts, scaled["est_cost"], scaled["est_cost_raw"]),
           "Check the X developer console for the billed amount.", ""]
 
     name = f"{today.isoformat()}_full.md"
@@ -1528,8 +1551,11 @@ def build_light_report(store, cfg, state, now, meter, events, light):
     today = now.date()
     spam_res = compile_spam(cfg)
     accounts = state["accounts"]
+    import weekly_rollup
+    summary = weekly_rollup.daily_summary(light)
     L = [f"# Follow Audit: daily check, {now.strftime('%a %b %d, %Y %I:%M %p')}", "",
          "Read-only run. Nothing was followed, unfollowed, blocked, muted or removed.", "",
+         "## Daily summary", ""] + [f"- {line}" for line in summary] + ["",
          f"- Followers: {light['followers_count']:,}" if light["followers_count"] is not None else "- Followers: n/a",
          f"- Following: {light['following_count']:,}" if light["following_count"] is not None else "- Following: n/a",
          f"- New followers: {light.get('headline') or light['new_followers']}",
@@ -1558,7 +1584,8 @@ def build_light_report(store, cfg, state, now, meter, events, light):
             a = assess(u, today, cfg, spam_res)
             rows.append([link(u), "yes" if a["verified"] else "", ", ".join(a["tags"]) or "clean"])
         L += ["## New followers", "", md_table(["Account", "Verified", "Flags"], rows), ""]
-    L += [f"Run cost: {meter.owned + meter.lookup:,} records read, about ${meter.cost():.2f}.", ""]
+    scaled = x_prices.counts(owned=meter.owned, post=getattr(meter, "posts", 0), user=meter.lookup)
+    L += [weekly_rollup.run_cost_line(meter.owned + meter.lookup, scaled["est_cost"], scaled["est_cost_raw"]), ""]
     path = os.path.join(store.reports, f"{today.isoformat()}_daily.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
@@ -1698,6 +1725,20 @@ def wait_for_redirect(redirect, st, stdin_paste, timeout=PASTE_WAIT_SECONDS, rea
                 pass
 
 
+def cmd_refile_gone(store, cfg, now):
+    """Move accounts already marked gone off the live lists and rebuild the report. No X calls."""
+    import weekly_rollup
+    state = store.load_state()
+    moved = weekly_rollup.refile_gone(state.get("accounts") or {})
+    store.save_state(state)
+    print(f"Refiled {len(moved)} gone accounts into Account gone. No X calls.")
+    if state.get("last_full"):
+        print(build_full_report(store, cfg, state, now, Meter(cfg), first=not state.get("prev_full")))
+    elif moved:
+        print("No full report yet. The flags are saved for the next report.")
+    return moved
+
+
 def cmd_signin_check(client):
     """Reuse a sign-in that already exists on this computer: one account read (GET /users/me),
     booked to this bot's ledger at its x_prices.py price. Never signs in again."""
@@ -1768,7 +1809,7 @@ def cmd_auth(store, cfg, client, paste, handle=None, force=False):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Read-only X follower and following tracker.")
-    p.add_argument("command", choices=["auth", "auth-paste", "signin-check", "full", "light", "daily", "recheck", "report"])
+    p.add_argument("command", choices=["auth", "auth-paste", "signin-check", "full", "light", "daily", "recheck", "report", "refile-gone"])
     p.add_argument("address", nargs="?", help="auth-paste: the full address the browser landed on after Authorize")
     p.add_argument("--dir", default=os.environ.get("FW_DIR", BOTS_HOME + "/follow-watch"))
     p.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
@@ -1790,6 +1831,9 @@ def main(argv=None):
     now = local_now(cfg)
     meter = Meter(cfg)
 
+    if args.command == "refile-gone":
+        cmd_refile_gone(store, cfg, now)
+        return
     if args.command == "report":
         state = store.load_state()
         if not state.get("last_full"):

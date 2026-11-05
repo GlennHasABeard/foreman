@@ -52,6 +52,31 @@ def expire_backlog(people, today, expire_days=30, still_engaging=()):
     return kept, dropped
 
 
+def track_leads_seen(seen, leads, today):
+    """Record every qualified lead this run, shown or not.
+
+    seen: {id: {username, first, last, times}}. Dates are ISO days.
+    """
+    if isinstance(today, datetime):
+        today = today.date()
+    day = today.isoformat()
+    seen = dict(seen or {})
+    for lead in leads or []:
+        uid = str(lead.get("id"))
+        name = ""
+        user = lead.get("u") or lead.get("user") or {}
+        if isinstance(user, dict):
+            name = user.get("username") or ""
+        name = name or lead.get("username") or ""
+        rec = seen.get(uid) or {"username": name, "first": day, "times": 0}
+        rec["username"] = name or rec.get("username") or ""
+        rec["first"] = rec.get("first") or day
+        rec["last"] = day
+        rec["times"] = int(rec.get("times") or 0) + 1
+        seen[uid] = rec
+    return seen
+
+
 def previous_week_count(history, today):
     """Count stored about 7 days ago, if one was saved."""
     if isinstance(today, datetime):

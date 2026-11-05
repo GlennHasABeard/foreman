@@ -265,10 +265,71 @@ def ref(t, kind):
     return None
 
 
+def apply_trial(cfg, trial):
+    """Caps for this pull. A trial uses the trial settings. No promo copy."""
+    if trial:
+        return {"max_cost": cfg.get("trial_max_cost"), "max_liker_posts": cfg.get("trial_max_liker_posts")}
+    return {"max_cost": cfg.get("max_cost_per_run"), "max_liker_posts": cfg.get("max_liker_posts_per_run")}
+
+
+def log_trial(st, what, caps):
+    """Remember that a trial ran and which caps it used. Generic, no owner-specific copy."""
+    path = os.path.join(st.root, "trials.json")
+    trials = read_json(path, [])
+    if not isinstance(trials, list):
+        trials = []
+    trials.append({"at": iso(now_utc()), "what": what, "caps": caps})
+    write_json(path, trials[-50:])
+
+
+def read_own_likes(known, fetched, max_items=400):
+    """Newest-first likes. Stop at the first id already saved. Returns (new_ids, finished)."""
+    known = set(known or [])
+    new = []
+    for post in fetched or []:
+        pid = post["id"] if isinstance(post, dict) else post
+        if pid in known:
+            return new, True
+        new.append(pid)
+        if len(new) >= int(max_items):
+            return new, False
+    return new, True
+
+
+def coverage_block(cut, cap, likes_done):
+    """What this pull read. A cap stop leads with the capped-pull line."""
+    cut = list(cut or [])
+    parts = []
+    line = None
+    if cut:
+        try:
+            shown = float(cap)
+        except (TypeError, ValueError):
+            shown = 0
+        line = f"Capped pull: skipped {cut[0]} (cost cap ${shown:.2f} reached)"
+        parts.append(line)
+        parts.append(f"Not read: {', '.join(cut)}. Counts for those are missing, not zero.")
+    parts.append("Your likes were read." if likes_done else
+                 "Your likes were not finished. Unchecked items may already be liked.")
+    return {"line": line, "text": " ".join(parts), "likes_done": bool(likes_done), "not_read": cut}
+
+
+def mark_already_liked(item, my_likes, likes_unfinished):
+    """Flag a radar item the owner already liked, or that the likes read did not reach."""
+    eid = item.get("id")
+    liked = eid in set(my_likes or [])
+    item["liked"] = liked
+    item["maybe_liked"] = bool(likes_unfinished) and not liked
+    return item
+
+
 def cmd_pull(st, fw, client, trial=False):
     cfg = st.cfg
     started = now_utc()
-    spend = Spend(cfg, cfg["trial_max_cost"] if trial else cfg["max_cost_per_run"])
+    caps = apply_trial(cfg, trial)
+    if trial:
+        log_trial(st, "pull", caps)
+    spend = Spend(cfg, caps["max_cost"])
     state = st.load("state", {})
     posts = st.load("posts", {})
     events = st.load("events", {})
@@ -390,7 +451,9 @@ def cmd_pull(st, fw, client, trial=False):
                 mark("your likes")
             else:
                 likes_done = True
-            new = [t["id"] for t in liked if t["id"] not in set(known)]
+            new, finished_known = read_own_likes(known, liked, cfg["my_likes_max_per_pull"])
+            if not finished_known:
+                likes_done = False
             st.save("my_likes", (new + known)[:5000])
             if new:
                 notes.append(f"Read {len(new)} new likes of yours.")
@@ -411,7 +474,7 @@ def cmd_pull(st, fw, client, trial=False):
             if p["kind"] != "reply" and not p.get("likers_fetched") and p.get("created")
             and lo <= ts(p["created"]) <= hi]
     todo.sort(key=lambda pid: posts[pid]["created"], reverse=True)
-    limit = cfg["trial_max_liker_posts"] if trial else cfg["max_liker_posts_per_run"]
+    limit = caps["max_liker_posts"]
     likes_ok = True
     batch = todo[:limit]
     body = None
@@ -473,22 +536,16 @@ def cmd_pull(st, fw, client, trial=False):
     live = {e["author"] for e in events.values()}
     users = {k: v for k, v in users.items() if k in live}
 
+    block = coverage_block(cut, caps["max_cost"], likes_done)
+    notes.insert(0, block["text"])
     if cut:
         which = "the crew's daily cap" if spend.crew_cap else "this pull's cost cap"
-        first = cut[0]
-        line = (f"Stopped before {first}, cap reached ({which}). Not read or not finished this pull: "
+        line = (f"Stopped before {cut[0]}, cap reached ({which}). Not read or not finished this pull: "
                 f"{', '.join(cut)}. Counts for those are missing, not zero. The next pull picks them up.")
         if spend.crew_cap:
             line += f" {spend.crew_cap}"
-        cap = cfg["trial_max_cost"] if trial else cfg["max_cost_per_run"]
-        try:
-            cap_shown = float(cap)
-        except (TypeError, ValueError):
-            cap_shown = 0
-        coverage = f"Capped pull: skipped {first} (cost cap ${cap_shown:.2f} reached)"
-        notes.insert(0, coverage)
         notes.insert(1, line)
-        print(f"{client.who}: {coverage}")
+        print(f"{client.who}: {block['line']}")
         print(f"{client.who}: {line}")
     state["last_pull"] = iso(started)
     state["last_pull_cut"] = cut
@@ -500,7 +557,7 @@ def cmd_pull(st, fw, client, trial=False):
     runs.append({"ts": iso(started), "trial": trial, "requests": spend.requests, "owned": spend.owned,
                  "quotes": spend.quotes, "likers": spend.likers, "users": spend.users,
                  "cost": round(spend.cost(), 4), "low": round(spend.low(), 4), "high": round(spend.high(), 4), "capped": stopped,
-                 "not_read": cut, "coverage": next((n for n in notes if str(n).startswith("Capped pull:")), None)})
+                 "not_read": cut, "coverage": block["line"], "coverage_text": block["text"]})
     st.save("runs", runs[-200:])
     path = write_pull_report(st, spend, stopped, notes, trial, posts, events, started, cut)
     print(path)
@@ -700,8 +757,9 @@ def cmd_radar(st, fw, fw_store):
         verified = fw.is_verified(u)
         mutual = they and i
         tier = 0 if (verified and mutual) else 1 if verified else 2 if mutual else 3
-        items.append({"id": eid, "e": e, "u": u, "tier": tier, "verified": verified, "mutual": mutual,
-                      "liked": eid in my_likes, "maybe_liked": likes_unfinished and eid not in my_likes})
+        items.append(mark_already_liked(
+            {"id": eid, "e": e, "u": u, "tier": tier, "verified": verified, "mutual": mutual},
+            my_likes, likes_unfinished))
     items.sort(key=lambda x: (x["liked"], x["tier"], -ts(x["e"]["created"]).timestamp()))
     shown = items[:cfg["radar_show"]]
 
@@ -859,6 +917,9 @@ def cmd_leads(st, fw, fw_store):
     for x in top:
         shown[x["id"]] = {"username": x["u"].get("username"), "date": today.isoformat(), "points": x["a"]["points"]}
     st.save("shown_leads", shown)
+    seen_path = os.path.join(st.root, "leads_seen.json")
+    seen = qol_leads.track_leads_seen(read_json(seen_path, {}), leads, today)
+    write_json(seen_path, seen)
 
     L = [f"# Fan Finder, {lt.strftime('%a %b %d, %Y')}", "",
          f"Verified accounts that engaged with your posts in the last {cfg['leads_days']} days and don't follow you. "
@@ -953,7 +1014,11 @@ def cap_warning(st):
         return f"{st.pull_blocked} This list is from the last pull that ran ({lp}), not a new one."
     cut = st.load("state", {}).get("last_pull_cut") or []
     if cut:
-        return (f"The last pull stopped before {cut[0]}, cap reached. Not read: {', '.join(cut)}. "
+        runs = st.load("runs", [])
+        cov = ""
+        if runs and isinstance(runs[-1], dict) and runs[-1].get("coverage"):
+            cov = runs[-1]["coverage"] + " "
+        return (cov + f"The last pull stopped before {cut[0]}, cap reached. Not read: {', '.join(cut)}. "
                 "This list may be missing items, so a low count here is not a real count.")
     return None
 

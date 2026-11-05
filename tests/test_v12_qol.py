@@ -330,5 +330,82 @@ class Defaults(unittest.TestCase):
         self.assertIn("Media expansions stay off", game_tab.EMBED_CAVEAT)
 
 
+class N55Gaps(unittest.TestCase):
+    def test_own_likes_stop_at_known(self):
+        import engagement
+        new, done = engagement.read_own_likes(["b"], [{"id": "c"}, {"id": "b"}, {"id": "a"}])
+        self.assertEqual(new, ["c"])
+        self.assertTrue(done)
+
+    def test_coverage_and_trial_caps(self):
+        import engagement
+        block = engagement.coverage_block(["your likes"], 1.5, False)
+        self.assertTrue(block["line"].startswith("Capped pull: skipped your likes"))
+        self.assertIn("not finished", block["text"])
+        caps = engagement.apply_trial({"max_cost_per_run": 2, "max_liker_posts_per_run": 15,
+                                       "trial_max_cost": 0.2, "trial_max_liker_posts": 1}, True)
+        self.assertEqual(caps["max_cost"], 0.2)
+        item = engagement.mark_already_liked({"id": "9"}, ["9"], True)
+        self.assertTrue(item["liked"])
+        self.assertFalse(item["maybe_liked"])
+
+    def test_leads_seen_and_refile(self):
+        seen = qol_leads.track_leads_seen({}, [{"id": "1", "u": {"username": "ada_demo"}}], date(2026, 11, 5))
+        self.assertEqual(seen["1"]["times"], 1)
+        accounts = {"1": {"gone": {"reason": "suspended"}, "follower_now": True, "user": {"username": "bea_demo"}}}
+        moved = weekly_rollup.refile_gone(accounts)
+        self.assertEqual(moved, ["bea_demo"])
+        self.assertFalse(accounts["1"]["follower_now"])
+
+    def test_daily_summary_and_cost(self):
+        lines = weekly_rollup.daily_summary({"headline": "4 (+1 in Followed you back)", "new_follows": 2, "est_unfollows": 1})
+        self.assertTrue(lines[0].startswith("Daily summary: 4"))
+        self.assertIn("unscaled", weekly_rollup.run_cost_line(10, 0.76, 1.0))
+
+    def test_cached_read_reuses(self):
+        cache, calls = {}, []
+
+        def fetch():
+            calls.append(1)
+            return [{"id": "1"}]
+
+        first, reused = weekly_rollup.cached_read(cache, ("1", "followers"), fetch)
+        second, reused2 = weekly_rollup.cached_read(cache, ("1", "followers"), fetch)
+        self.assertEqual(first, second)
+        self.assertFalse(reused)
+        self.assertTrue(reused2)
+        self.assertEqual(len(calls), 1)
+
+    def test_missing_verified_impressions_are_not_zero(self):
+        import creator_scout
+        with tempfile.TemporaryDirectory() as tmp:
+            open(os.path.join(tmp, "verified_daily_latest.csv"), "w").write("date,impressions\n2026-11-01,10\n")
+            got = creator_scout.expect_file("verified_90d.csv", tmp)
+        self.assertEqual(got["status"], "missing")
+        self.assertIn("Not counted as zero", got["note"])
+        self.assertTrue(got["kept"])
+
+
+class DemoJuniper(unittest.TestCase):
+    def test_profile_shape(self):
+        sys.path.insert(0, os.path.join(ROOT, "site"))
+        import demo_juniper
+        prof = demo_juniper.profile()
+        self.assertEqual(prof["username"], "junipervale_demo")
+        self.assertEqual(prof["followers"], 2400)
+        pool = demo_juniper.scout_pool()
+        self.assertTrue(all(c["username"].endswith("_demo") for c in pool))
+        labels = demo_juniper.rarity_labels(pool)
+        self.assertTrue(any(v["rarity"] == "Legendary" for v in labels.values()))
+        # The stored label is the cut's label. Nothing rewrites Legendary to Common.
+        for cand in pool:
+            self.assertIn(labels[cand["username"]]["rarity"], ("Legendary", "Rare", "Common"))
+        sample = demo_juniper.game_sample(pool, labels)
+        self.assertEqual(sample["pack"][0]["rarity"], labels[pool[0]["username"]]["rarity"])
+        self.assertIn("LIVE", sample["note"])
+        done = demo_juniper.marks()["done"]
+        self.assertTrue(any(v.get("done") == 1 and v.get("at") for v in done.values()))
+
+
 if __name__ == "__main__":
     unittest.main()

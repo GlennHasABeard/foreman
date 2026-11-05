@@ -250,6 +250,27 @@ class Spend:
 # Search
 # ----------------------------------------------------------------------------
 
+def expect_file(name, folder, saved_name="verified_daily_latest.csv"):
+    """File check for an optional analytics export. No network.
+
+    A missing verified-impressions file is not zero impressions. If a saved copy
+    exists, the note says to keep it. n55 cannot tell which side of a diff is newer.
+    """
+    folder = folder or ""
+    path = os.path.join(folder, name) if folder else name
+    if path and os.path.exists(path) and os.path.getsize(path) > 0:
+        return {"status": "ok", "path": path, "note": ""}
+    verified = name in ("verified_90d.csv", "overview_verified_14d.csv") or "verified" in name
+    saved = os.path.join(folder, saved_name) if folder else ""
+    if verified and saved and os.path.exists(saved) and os.path.getsize(saved) > 0:
+        return {"status": "missing", "kept": saved,
+                "note": "Verified impressions export is missing. Last saved file kept. Not counted as zero."}
+    if verified:
+        return {"status": "missing", "kept": None,
+                "note": "Verified impressions export is missing. Not counted as zero."}
+    return {"status": "missing", "kept": None, "note": f"{name} missing."}
+
+
 def build_query(q, cfg, verified):
     q = q.strip()
     if verified and "is:verified" not in q:
@@ -616,6 +637,10 @@ def run(mode, p, cfg, client, fw, fw_store, now):
     notes = []
     if scan_note(fw_state):
         notes.append(scan_note(fw_state))
+    if cfg.get("analytics_dir"):
+        checked = expect_file("verified_90d.csv", cfg["analytics_dir"])
+        if checked.get("note"):
+            notes.append(checked["note"])
 
     trial = mode == "trial"
     per_q = cfg["trial_posts_per_query"] if trial else cfg["posts_per_query"]

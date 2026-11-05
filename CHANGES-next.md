@@ -1,0 +1,41 @@
+# Changes for the next release
+
+v1.2.0 prep ports the items below into the template pack. Nothing here is tagged.
+
+## Shipped in this prep
+
+### Follow Finder
+- Game tab stays off until `creator-scout/game/LIVE` exists.
+- Unofficial embed caveat: Daily Pack uses `platform.twitter.com/widgets.js`, and blind cards plus vision sheets may read `cdn.syndication.twimg.com`. $0. If it breaks, saved post text remains and unrated picks stay blurred. Media expansions stay off.
+
+### Analytics Log
+- 500K leave-window card (already in the pack, covered by `tests/test_v12_leave_window.py`).
+- `seal` replaces `finish`. Manifest key `finished` unchanged. No alias.
+- Tracker upsert by date (`sheets_sync.plan_tracker_upsert`).
+- Replies scorecard ships **off**.
+
+### QOL rounds 5 to 8
+- n01 newest-followers skip at 5 lost, with a 7-night replay. `--force` overrides.
+- n02 new-follower headline equals the named rows.
+- n03 Sunday rollup from saved data.
+- n48 `x_prices.counts()` scales owned-read display estimates and keeps `est_cost_raw`. Caps stay unscaled.
+- n23, n19, n20, n21, n22 radar new chip, questions, low-value fold, one row per account, thread rollup.
+- n27 stored likes still count when new like pulls are off.
+- n14 `catch-up` from saved posts.
+- n09 word-boundary off-topic filters.
+- n17 flagged mutuals. n13 rollover lookup **off** (about $0.01 per rollover if enabled). n32 later-local-day reruns. n31 `max_per_tool` 2.
+- n10 like floor on the shown best post. n05 language floors, not caps.
+- Radar Done marks `{done, at}` and `qol7_medrt` at publish.
+- n12 keep-fresh rollovers. n30 `media-list`. n29 `nudge`. n52 Due today.
+- n35 `seal`. n07 sensitive rest. n15 week N. n18 one extra band. n06 size-band floors.
+- n26 backlog line: "N people still engaging who don't follow you yet (±D vs last week)".
+- n49 capped-pull line. n38 replies scorecard **off**.
+- Warm Leads `leads_expire_days` default 30.
+
+## Not ported
+
+- n51 Home free-credit Spend UI.
+- n34 Tally Posts sheet chunk helper.
+- Field Notes, X archives, Whetstone, Drafts, and any private owner config.
+- Anything under a private exclude list.
+- Git tag, GitHub release, and zip. Those wait until this prep is reviewed.

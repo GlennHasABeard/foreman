@@ -15,4 +15,5 @@ public/
 .template-master
 *.bak*
 __pycache__/
-tests/
+tests/*
+!tests/test_v12_*.py

@@ -47,6 +47,9 @@ import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import qol_scout  # noqa: E402
+
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
@@ -92,6 +95,12 @@ DEFAULT_CONFIG = {
     "trial_posts_per_query": 40,
     "trial_max_cost": None,
     "projection_targets": [5, 10, 15, 25],
+    # Free pre-screen. Language shares are floors, not caps. slack is unused.
+    "offtopic_terms": [],
+    "lang_balance": {},
+    "lang_balance_slack": 0,
+    "size_bands": [],
+    "sensitive_rest": {"fails": 3, "days": 30},
 }
 
 TWEET_FIELDS = "created_at,public_metrics,author_id,lang,possibly_sensitive"
@@ -356,20 +365,27 @@ def evaluate(users, posts, cfg, fw, fw_cfg, today, following, followers, seen, m
             drop("fake or spam signals"); continue
         if (u.get("username") or "").lower() in never:
             drop("on your never-show list"); continue
+        sens = cfg.get("_sensitive_state")
+        if sens is not None and qol_scout.resting(sens, u.get("username") or "", today):
+            drop("sensitive rest"); continue
         their = sorted(by_author.get(uid, []), key=post_points, reverse=True)
         text = " ".join([u.get("name") or "", u.get("description") or "", u.get("url") or ""]
-                        + [q.get("text") or "" for q in their]).lower()
-        if any(t in text for t in terms):
+                        + [q.get("text") or "" for q in their])
+        why_off = qol_scout.offtopic_reason(text, cfg.get("offtopic_terms") or [])
+        if why_off:
+            drop("off topic: " + why_off); continue
+        if any(t in text.lower() for t in terms):
             drop("adult or suggestive content"); continue
         if any(q.get("possibly_sensitive") for q in their):
+            if sens is not None:
+                fails, rest_days = qol_scout.sensitive_rest_cfg(cfg)
+                qol_scout.note_sensitive(sens, u.get("username") or "", today, fails, rest_days)
             drop("post marked sensitive by X"); continue
         best = post_points(their[0]) if their else 0
-        best_likes = ((their[0].get("public_metrics") or {}).get("like_count", 0) or 0) if their else 0
-        settled = [q for q in their if post_age_hours(q, now_utc) >= 24]
-        if settled:
-            settled_likes = max((q.get("public_metrics") or {}).get("like_count", 0) or 0 for q in settled)
-            if settled_likes < cfg.get("min_best_post_likes", 0):
-                drop("best post under the like floor"); continue
+        shown = their[0] if their else None
+        shown_likes = ((shown.get("public_metrics") or {}).get("like_count", 0) or 0) if shown else 0
+        if qol_scout.shown_under_like_floor(shown_likes, cfg.get("min_best_post_likes", 0), bool(shown)):
+            drop("best post under the like floor"); continue
         rate = best / max(fol, 1)
         kept.append({
             "id": uid, "username": u.get("username", ""), "name": u.get("name", ""),
@@ -652,12 +668,18 @@ def run(mode, p, cfg, client, fw, fw_store, now):
         notes.insert(0, msg)
         print(f"{client.who}: {msg}")
 
-    kept, dropped = evaluate(all_users, all_posts, cfg, fw, fw_cfg, today, following, followers, seen, my_id)
+    sens_path = os.path.join(p.root, "sensitive_fails.json")
+    sens = read_json(sens_path, {})
+    cfg_run = dict(cfg)
+    cfg_run["_sensitive_state"] = sens
+    kept, dropped = evaluate(all_users, all_posts, cfg_run, fw, fw_cfg, today, following, followers, seen, my_id)
+    write_json(sens_path, sens)
     w = _v11_wire()
     if w:  # "never show @name" and 60-day rests from chat (or synced KV) marks
         os.environ["CREW_BOT"] = "Follow Finder"
         kept = [c for c in kept if w.v11.visible(c.get("username") or "", name="Follow Finder")]
-    shortlist = kept[:cfg["shortlist_size"]]
+    shortlist = qol_scout.select_shortlist(
+        kept, cfg["shortlist_size"], cfg.get("lang_balance"), cfg.get("size_bands"), cfg.get("lang_balance_slack"))
     for c in shortlist:
         seen[c["id"]] = {"username": c["username"], "shown": today.isoformat()}
     write_json(p.seen, seen)
@@ -670,11 +692,21 @@ def run(mode, p, cfg, client, fw, fw_store, now):
                 "mutual": sum(1 for i in earlier if i in following and i in followers)}
 
     runs = read_json(p.runs, [])
+    coverage = None
+    if stopped or spend.crew_cap:
+        skipped = ", ".join(not_run) if not_run else "search"
+        try:
+            cap_shown = float(cap)
+        except (TypeError, ValueError):
+            cap_shown = 0
+        coverage = f"Capped pull: skipped {skipped} (cost cap ${cap_shown:.2f} reached)"
+        notes.append(coverage)
     runs.append({"ts": now.isoformat(timespec="seconds"), "mode": mode, "requests": spend.requests,
                  "posts": spend.posts, "users": spend.users, "candidates": len(kept),
                  "shortlist": len(shortlist), "cost_low": round(spend.low(), 4),
                  "cost_high": round(spend.high(), 4), "stopped_for_cap": stopped,
-                 "crew_cap": bool(spend.crew_cap), "searches_not_run": not_run})
+                 "crew_cap": bool(spend.crew_cap), "searches_not_run": not_run,
+                 "coverage": coverage})
     write_json(p.runs, runs[-200:])
 
     report = write_report(p, cfg, now, mode, spend, stopped, kept, dropped, shortlist, past, used, notes)
@@ -722,6 +754,12 @@ def verify(p, cfg, client, fw, fw_store, now, src):
     if scan_note(fw_state):
         notes.append(scan_note(fw_state))
 
+    sens_path = os.path.join(p.root, "sensitive_fails.json")
+    sens = read_json(sens_path, {})
+    resting = [n for n in names if qol_scout.resting(sens, n, today)]
+    if resting:
+        notes.append("Skipped before any paid lookup, sensitive rest: " + ", ".join("@" + n for n in resting))
+        names = [n for n in names if n not in resting]
     spend = Spend(cfg, cfg["max_cost_per_run"])
     if len(names) * P().RATES["user"] + len(post_ids) * P().RATES["post"] > spend.cap:
         raise SystemExit("This list would cost more than max_cost_per_run. Shorten it or raise the cap.")
@@ -768,8 +806,12 @@ def verify(p, cfg, client, fw, fw_store, now, src):
         print(f"{client.who}: {msg}")
 
     seen = read_json(p.seen, {})
-    kept, dropped = evaluate(users, posts, cfg, fw, fw_cfg, today, following, followers, seen, my_id)
-    shortlist = kept[:cfg["shortlist_size"]]
+    cfg_run = dict(cfg)
+    cfg_run["_sensitive_state"] = sens
+    kept, dropped = evaluate(users, posts, cfg_run, fw, fw_cfg, today, following, followers, seen, my_id)
+    write_json(sens_path, sens)
+    shortlist = qol_scout.select_shortlist(
+        kept, cfg["shortlist_size"], cfg.get("lang_balance"), cfg.get("size_bands"), cfg.get("lang_balance_slack"))
     for c in shortlist:
         seen[c["id"]] = {"username": c["username"], "shown": today.isoformat()}
     write_json(p.seen, seen)

@@ -516,12 +516,19 @@ GAME_FLAG, GAME_JS, GAME_JSON = (os.path.join(GAME_DIR, "LIVE"), os.path.join(GA
 
 
 def game_live():
-    return os.path.exists(GAME_FLAG) or os.environ.get("GAME_LIVE_PREVIEW") == "1"
+    """Off unless the owner says turn on Game, which creates creator-scout/game/LIVE."""
+    flag = os.path.join(os.environ.get("BOTS_HOME", "/workspace").rstrip("/"), "creator-scout", "game", "LIVE")
+    return os.path.exists(flag) or os.environ.get("GAME_LIVE_PREVIEW") == "1"
 
 
 def game_publish():
     """Ship game.json and put the Game tab on the FINAL follow-finder.html. Never ships game data when off.
-    The Daily Pack uses only X's official embed widget (platform.twitter.com widgets.js)."""
+
+    The Daily Pack uses X's free embed widget (platform.twitter.com/widgets.js). Blind cards and vision
+    sheets also read the free embed data at cdn.syndication.twimg.com. That path is unofficial and
+    undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall
+    back to the saved post text and unrated picks stay blurred. Media expansions stay off.
+    """
     gj = os.path.join(SITE_DIR, "game.json")
     if not game_live():
         if os.path.exists(gj):
@@ -639,10 +646,24 @@ def v11_render(w):
         store = v.load_store(title)
         at = w._ts(sv["at"]) if sv else datetime.fromtimestamp(os.path.getmtime(os.path.join(SITE_DIR, full))).astimezone()
         status = (sv or {}).get("status") or "Ran OK"
+        runs = v._load(os.path.join(w.root(title), "runs.json"), [])
+        cov = runs[-1].get("coverage") if isinstance(runs, list) and runs and isinstance(runs[-1], dict) else ""
+        if cov and cov not in status:
+            status = cov if status == "Ran OK" else status + ". " + cov
         if title == "Reply Queue":
             posts = v._load(os.path.join(w.root(title), "posts.json"), {})
             evs = v._load(os.path.join(w.root(title), "events.json"), {})
+            users = v._load(os.path.join(w.root(title), "users.json"), {})
             sens = {k for k, e in evs.items() if isinstance(e, dict) and e.get("sensitive")}
+            try:
+                import qol7_medrt
+                med = qol7_medrt.publish_line(posts, evs, (store or {}).get("done"), users)
+            except Exception:
+                med = ""
+            if med:
+                sv = dict(sv or {})
+                lines = [l for l in (sv.get("lines") or []) if "median time to reply" not in l.lower()]
+                sv["lines"] = [med] + lines
             body = P.reply_queue(data, sv, {k: (p or {}).get("text", "") for k, p in posts.items() if isinstance(p, dict)}, sens)
         elif title == "Fan Finder":
             body = P.fan_finder(data, sv, store)
@@ -734,8 +755,19 @@ def v11_render(w):
         strip.append(("today's spend" + (f" of ${cap:.2f} cap" if cap else "") + " (X billing days, UTC)", f"${today:.2f}"))
         ok = [n for n in inst if (w.saved(n) or {}).get("status", "").startswith("Ran OK")]
         status = f"{len(ok)} of {len(inst)} bots ran OK on their last run."
+        due_names = []
+        try:
+            import qol7_due
+            sched = None
+            for cand in (os.path.join(BOTS_HOME, "schedule.json"), os.path.join(BOTS_HOME, "dispatch", "schedule.json")):
+                if os.path.exists(cand):
+                    sched = json.load(open(cand, encoding="utf-8"))
+                    break
+            due_names = qol7_due.due_today(sched or {})
+        except Exception:
+            due_names = []
         with open(os.path.join(SITE_DIR, "index.html"), "w", encoding="utf-8") as f:
-            f.write(P.shell("Home", "home", v.last_updated(v.now()), status, P.home(panels, people, top, strip),
+            f.write(P.shell("Home", "home", v.last_updated(v.now()), status, P.home(panels, people, top, strip, due_names),
                             marks, navitems, demo, 'Say "follow up @name on YYYY-MM-DD" in chat.', hosted))
         built.append("index.html")
     built += v11_extra_pages(w, P, navitems, demo, hosted)

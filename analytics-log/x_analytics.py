@@ -8,7 +8,9 @@ the running records. It makes no X API calls and changes nothing on X.
   python3 x_analytics.py start morning|night     make a new pull folder and print the checklist
   python3 x_analytics.py start test              a full night checklist whose results stay inside its own
                                                  folder (test_data/) and never touch the running records
-  python3 x_analytics.py finish [PULL_DIR]       parse a pull (default: the newest) and update the records
+  python3 x_analytics.py seal [PULL_DIR]         parse a pull (default: the newest) and update the records
+                                                 The manifest key stays "finished". There is no finish alias.
+  python3 x_analytics.py scorecard               weekly replies scorecard, off until replies_scorecard.enabled is true
   python3 x_analytics.py status                  the last few pulls and their flags
 
 Every pull folder is named by its local start time and kind, for example
@@ -24,6 +26,10 @@ import os
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import replies_scorecard  # noqa: E402
+import sheets_sync  # noqa: E402
 
 
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
@@ -636,7 +642,7 @@ def cmd_start(p, kind):
     lines += ["", "Fill in raw/panels.txt, one value per line, exactly as shown:"] + [f"- {k}" for k in keys]
     if extra_keys:
         lines += ["", "Night extras, also in panels.txt (sections: " + ", ".join(EXTRA_SPEC) + ")"]
-    lines += ["", f"Then run: python3 {os.path.abspath(__file__)} finish {folder}"]
+    lines += ["", f"Then run: python3 {os.path.abspath(__file__)} seal {folder}"]
     print("\n".join(lines))
 
 
@@ -848,8 +854,19 @@ def cmd_finish(p, folder):
     prev_ok = [r for r in prev if r.get("status") == "ok"]
     out["tracker"]["change_since_last_pull"] = (
         tr["value"] - int(prev_ok[-1]["value"]) if tr["value"] is not None and prev_ok else None)
-    append_csv(p.d("tracker.csv"), ["pull_id", "pulled_at_et", "kind", "value", "raw", "status", "screenshot"],
-               [dict(out["tracker"], pull_id=pid, pulled_at_et=pulled, kind=kind)])
+    tracker_row = dict(out["tracker"], pull_id=pid, pulled_at_et=pulled, kind=kind,
+                       date=str(pulled)[:10])
+    tracker_fields = ["date", "pull_id", "pulled_at_et", "kind", "value", "raw", "status", "screenshot"]
+    if cfg.get("tracker_upsert", True):
+        existing = read_csv(p.d("tracker.csv"))
+        updated, _action = sheets_sync.plan_tracker_upsert(existing, tracker_row)
+        write_csv(p.d("tracker.csv"), tracker_fields, updated)
+        col_a = cfg.get("tracker_col_a_file") or ""
+        if col_a:
+            dest = col_a if os.path.isabs(col_a) else p.d(col_a)
+            write_csv(dest, ["A"], sheets_sync.column_a_rows(updated))
+    else:
+        append_csv(p.d("tracker.csv"), tracker_fields, [tracker_row])
 
     # 2. followers
     expect_file("followers.png")
@@ -1389,20 +1406,35 @@ def cmd_status(p):
         print("Started but not finished: " + ", ".join(open_pulls))
 
 
+def cmd_scorecard(p):
+    """Weekly scorecard from the content export already pulled. Off by default. $0."""
+    cfg = p.cfg()
+    if not replies_scorecard.enabled(cfg):
+        print(replies_scorecard.off_line())
+        return
+    posts = read_csv(p.d("posts_latest.csv"))
+    card = replies_scorecard.scorecard(posts, cfg)
+    print(card["line"])
+    for row in card["rows"]:
+        print(f"- {row['date']} {int(row['views'])} views, {int(row['follows'])} follows. {row['text']}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Files and parses X analytics pulls. No X API calls.")
-    ap.add_argument("command", choices=["start", "finish", "status", "checkvideos"])
-    ap.add_argument("arg", nargs="?", help="start: morning or night. finish: pull folder (default newest)")
+    ap.add_argument("command", choices=["start", "seal", "status", "checkvideos", "scorecard"])
+    ap.add_argument("arg", nargs="?", help="start: morning or night. seal: pull folder (default newest)")
     a = ap.parse_args(argv)
     p = P()
     if a.command == "start":
         if a.arg not in ("morning", "night", "test"):
             raise SystemExit("start needs morning, night or test")
         cmd_start(p, a.arg)
-    elif a.command == "finish":
+    elif a.command == "seal":
         cmd_finish(p, a.arg)
     elif a.command == "checkvideos":
         cmd_checkvideos(p)
+    elif a.command == "scorecard":
+        cmd_scorecard(p)
     else:
         cmd_status(p)
 
@@ -1425,7 +1457,7 @@ def _v11_wire():
 
 def _v11_before(argv):
     """v1.1: pull this bot's page marks from KV (hosted) into its own files before the run."""
-    runs = {"finish": ("Analytics Log", None)}
+    runs = {"seal": ("Analytics Log", None)}
     cmd = next((x for x in argv if not x.startswith("-")), "")
     if cmd not in runs:
         return
@@ -1440,7 +1472,7 @@ def _v11_before(argv):
 
 
 def _v11_after(argv):
-    runs = {"finish": ("Analytics Log", None)}
+    runs = {"seal": ("Analytics Log", None)}
     cmd = next((x for x in argv if not x.startswith("-")), "")
     if cmd not in runs:
         return

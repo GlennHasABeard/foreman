@@ -95,6 +95,10 @@ DEFAULT_CONFIG = {
     "inactive_days": None,
     "dormant_days": None,
     "daily_spend_cap": None,
+    # Skip the daily newest-followers read when this many (or fewer) look lost. --force overrides.
+    "daily_newest_threshold": 5,
+    # Sunday rollup of named unfollows from saved data. weekday 6 is Sunday.
+    "weekly_rollup": {"enabled": True, "weekday": 6, "days": 7},
     "likely_fake_score": 50,
     "watch_score": 35,
     "max_resources_per_run": 30000,
@@ -1079,7 +1083,13 @@ def cmd_full(store, cfg, client, now, limit=None):
     print(path)
 
 
-def cmd_light(store, cfg, client, now, page_size=None):
+def new_follower_headline(named, followed_back=0, seen_not_listed=0):
+    """The headline count is the named rows. Extras stay in the parenthesis."""
+    import weekly_rollup
+    return weekly_rollup.new_follower_headline(named, followed_back, seen_not_listed)
+
+
+def cmd_light(store, cfg, client, now, page_size=None, force=False):
     today, ts = now.date(), now.astimezone(timezone.utc).isoformat(timespec="seconds")
     state = store.load_state()
     if not state.get("baseline_date"):
@@ -1091,10 +1101,21 @@ def cmd_light(store, cfg, client, now, page_size=None):
     known_fol = {i for i, a in accounts.items() if a.get("follower_now")}
 
     size = page_size or cfg["light_page_size"]
+    counts_now = me.get("public_metrics") or {}
+    prev_counts = state.get("last_me_counts") or {}
+    est_before = None
+    if prev_counts.get("followers_count") is not None and counts_now.get("followers_count") is not None:
+        est_before = max(0, int(prev_counts["followers_count"]) - int(counts_now["followers_count"]))
+    import weekly_rollup
+    threshold = int(cfg.get("daily_newest_threshold", 5))
+    skip_fol = weekly_rollup.skip_newest_read(est_before, threshold, force)
     new_f, complete_f = client.list_newest(uid, "following", known_fing, size,
                                            cfg["light_max_pages"], cfg["light_stop_after_known"])
-    new_fol, complete_fol = client.list_newest(uid, "followers", known_fol, size,
-                                               cfg["light_max_pages"], cfg["light_stop_after_known"])
+    if skip_fol:
+        new_fol, complete_fol = [], True
+    else:
+        new_fol, complete_fol = client.list_newest(uid, "followers", known_fol, size,
+                                                   cfg["light_max_pages"], cfg["light_stop_after_known"])
     events = []
     for u in new_f:
         acc = accounts.setdefault(u["id"], {})
@@ -1122,11 +1143,24 @@ def cmd_light(store, cfg, client, now, page_size=None):
     est_lost = None
     if "followers_count" in prev and "followers_count" in counts:
         est_lost = max(0, prev["followers_count"] + len(new_fol) - counts["followers_count"])
+    implied_new = None
+    if prev_counts.get("followers_count") is not None and counts.get("followers_count") is not None:
+        implied_new = max(0, int(counts["followers_count"]) - int(prev_counts["followers_count"]) + int(est_lost or 0))
+    named_nf = sum(1 for e in events if e["event"] == "new_follower")
+    back_n = sum(1 for e in events if e["event"] in ("followed_back", "new_mutual"))
+    seen_not_listed = max(0, (implied_new or 0) - named_nf - back_n) if implied_new is not None else 0
     light = {"ts": ts, "followers_count": counts.get("followers_count"),
              "following_count": counts.get("following_count"),
              "new_followers": len(new_fol), "new_follows": len(new_f),
-             "est_unfollows": est_lost, "complete": complete_f and complete_fol}
+             "est_unfollows": est_lost, "est_lost_before": est_before,
+             "skipped_newest": skip_fol, "seen_not_listed": seen_not_listed,
+             "complete": complete_f and complete_fol}
+    scaled = x_prices.counts(owned=client.meter.owned, post=client.meter.posts, user=client.meter.lookup)
+    light["est_cost_raw"] = scaled["est_cost_raw"]
+    light["est_cost"] = scaled["est_cost"]
     state.setdefault("light_log", []).append(light)
+    light["replay"] = weekly_rollup.seven_night_line(state["light_log"], threshold)
+    light["headline"] = new_follower_headline(named_nf, back_n, seen_not_listed)
     state["light_log"] = state["light_log"][-120:]
     state["last_me_counts"] = counts
     state["last_run"] = {"ts": ts, "kind": "light"}
@@ -1137,8 +1171,8 @@ def cmd_light(store, cfg, client, now, page_size=None):
     return events, light
 
 
-def cmd_daily(store, cfg, client, now):
-    events, light = cmd_light(store, cfg, client, now, page_size=cfg["daily_page_size"])
+def cmd_daily(store, cfg, client, now, force=False):
+    events, light = cmd_light(store, cfg, client, now, page_size=cfg["daily_page_size"], force=force)
     state = store.load_state()
     today = now.date()
     # bring the snapshot numbers up to date so the Follow Audit page reflects today
@@ -1150,13 +1184,15 @@ def cmd_daily(store, cfg, client, now):
     for e in events:
         kinds[e["event"]] = kinds.get(e["event"], 0) + 1
     s = state["last_full"]["summary"]
-    print(f"Daily check {now.strftime('%a %b %d, %I:%M %p')}: {kinds.get('new_follower', 0)} new followers, "
-          f"{kinds.get('followed_back', 0) + kinds.get('new_mutual', 0)} followed you back, "
+    back = kinds.get("followed_back", 0) + kinds.get("new_mutual", 0)
+    headline = new_follower_headline(kinds.get("new_follower", 0), back, light.get("seen_not_listed") or 0)
+    print(f"Daily check {now.strftime('%a %b %d, %I:%M %p')}: {headline} new followers, "
           f"{kinds.get('you_followed', 0)} new follows by you, "
           f"about {light['est_unfollows'] if light['est_unfollows'] is not None else 'n/a'} unfollows (names come "
           f"with the monthly full scan). Not following back: {s['not_following_back']:,}. "
           f"Read {client.meter.owned + client.meter.lookup:,} records, about ${client.meter.cost():.2f}."
-          + ("" if light["complete"] else " More new accounts than this check reads, the next run continues."))
+          + ("" if light["complete"] else " More new accounts than this check reads, the next run continues.")
+          + ((" " + light["replay"]) if light.get("replay") else ""))
 
 
 # ----------------------------------------------------------------------------
@@ -1246,14 +1282,27 @@ def build_full_report(store, cfg, state, now, meter, first):
         fb_days = [int(e["days"]) for e in fb if e["days"] not in ("", None) and not e["days_min"]]
         avg = (f", average {sum(fb_days) / len(fb_days):.0f} days for accounts you followed after tracking began"
                if fb_days else "")
+        named_new = by.get("new_follower", [])
+        roll = (cfg.get("weekly_rollup") or {})
+        pending = 0
+        log = state.get("light_log") or []
+        if log and log[-1].get("est_unfollows") is not None:
+            pending = max(0, int(log[-1]["est_unfollows"]) - len(by.get("unfollowed_you", [])))
+        import weekly_rollup
+        rollup = weekly_rollup.sunday_rollup(
+            store.read_events(), today, weekday=int(roll.get("weekday", 6)),
+            days=int(roll.get("days", 7)), enabled=roll.get("enabled", True),
+            pending_unnamed=pending)
         L += [f"## Since {since}", "",
-              f"- New followers: {len(by.get('new_follower', []))}",
+              f"- New followers: {new_follower_headline(len(named_new), len(fb), 0)}",
               f"- Followed you back: {len(fb)}{avg}",
               f"- New mutuals from both sides at once: {len(by.get('new_mutual', []))}",
               f"- Unfollowed you: {len(by.get('unfollowed_you', []))}",
               f"- Gone (suspended or deactivated): {len(by.get('gone', []))}",
               f"- You followed: {len(by.get('you_followed', []))}",
               f"- You unfollowed: {len(by.get('you_unfollowed', []))}", ""]
+        if rollup:
+            L += [f"## {rollup['text'].splitlines()[0]}", ""] + rollup["text"].splitlines()[1:] + [""]
 
         uf = by.get("unfollowed_you", [])
         if uf:
@@ -1483,13 +1532,17 @@ def build_light_report(store, cfg, state, now, meter, events, light):
          "Read-only run. Nothing was followed, unfollowed, blocked, muted or removed.", "",
          f"- Followers: {light['followers_count']:,}" if light["followers_count"] is not None else "- Followers: n/a",
          f"- Following: {light['following_count']:,}" if light["following_count"] is not None else "- Following: n/a",
-         f"- New followers: {light['new_followers']}",
+         f"- New followers: {light.get('headline') or light['new_followers']}",
          f"- New follows by you (clock started): {light['new_follows']}"]
     if light["est_unfollows"] is not None:
         L.append(f"- Unfollows since last check: about {light['est_unfollows']} "
                  "(count only. Names come with the weekly full scan.)")
     if not light["complete"]:
         L.append("- More new accounts than this check reads. The next full scan picks up the rest.")
+    if light.get("skipped_newest"):
+        L.append("- Newest-followers read skipped. The estimate was at or under the threshold.")
+    if light.get("replay"):
+        L.append(f"- {light['replay']}")
     L.append("")
     fb = [e for e in events if e["event"] in ("followed_back", "new_mutual")]
     if fb:
@@ -1719,7 +1772,7 @@ def main(argv=None):
     p.add_argument("address", nargs="?", help="auth-paste: the full address the browser landed on after Authorize")
     p.add_argument("--dir", default=os.environ.get("FW_DIR", BOTS_HOME + "/follow-watch"))
     p.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
-    p.add_argument("--force", action="store_true", help="auth: sign in again even though a sign-in exists (logs the old one out)")
+    p.add_argument("--force", action="store_true", help="auth: sign in again even though a sign-in exists (logs the old one out). light/daily: read newest followers even when the loss estimate is under daily_newest_threshold")
     p.add_argument("--likes", action="store_true", help="auth: add like.read (Reply Queue or Fan Finder chosen)")
     p.add_argument("--followers", action="store_true", help="recheck: include your followers, not only accounts you follow")
     p.add_argument("--limit", type=int, help="full: read only the first N followers and N following (a partial scan, for testing)")
@@ -1763,9 +1816,9 @@ def main(argv=None):
         if args.command == "full":
             cmd_full(store, cfg, client, now, args.limit)
         elif args.command == "light":
-            cmd_light(store, cfg, client, now)
+            cmd_light(store, cfg, client, now, force=args.force)
         elif args.command == "daily":
-            cmd_daily(store, cfg, client, now)
+            cmd_daily(store, cfg, client, now, force=args.force)
     except CapReached as e:
         # nothing from this run is saved, so the last report's numbers stay as they were
         print(stopped_line(client.who, e) + f" Nothing from this {args.command} run was saved, so no new counts "

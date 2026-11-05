@@ -3,13 +3,15 @@
 Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot follow-audit` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
-Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch`. Scripts only, never a sign-in or token file.
+Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch`. Scripts only, never a sign-in or token file.
 
 ## Questions
 Ask only these and save them in `$BOTS_HOME/follow-watch/config.json`: `inactive_days`, `dormant_days`. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Follow Audit notes
 Before any full scan, show its cost from the follower and following counts in the free account read (about $0.65 to $1.00 per 1,000 accounts). If it does not fit the cap, offer the one-day raise or skip it for later.
+
+The daily newest-followers read is skipped when the estimate is `daily_newest_threshold` lost or fewer (default 5). `--force` overrides. The report shows the threshold and a 7-night replay. The monthly full scan is unchanged. On Sundays the report adds a rollup of named unfollows from saved data (`weekly_rollup`, weekday 6). The new-follower headline matches the named rows, with extras labelled.
 
 ## Cap and ledger
 Run `CREW_BOT="Follow Audit" python3 $BOTS_HOME/follow-watch/bot_spend.py individual`. It marks this bot as set up from its individual template, so it keeps its own cap and ledger even if a Foreman crew lives in this `$BOTS_HOME`, and prints the mode.

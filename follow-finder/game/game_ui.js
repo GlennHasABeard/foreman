@@ -95,7 +95,12 @@ function taste(){var d=G.deck.filter(function(x){return !S.taste[x.k]});
  if(revealed)return '<div class="gtaste">'+card({h:revealed.h,name:revealed.name,avatar:revealed.avatar,followers:revealed.followers,rarity:revealed.pick==="keep"?"Kept":"Passed",why:revealed.pick==="keep"?"Moves to the top of your next pack":"Counts as a light signal against "+revealed.styles.join(", ")+" posts",post:{id:revealed.id,text:revealed.text,likes:revealed.likes,created:""}})+'<div class="gbtns" style="margin-top:10px"><button class="gb p" data-next>Next post</button></div></div>';
  if(!d.length)return '<p class="gsub">No more posts today. New ones come with tomorrow\'s pack.</p>';
  var x=d[0];return '<div class="gtaste"><div class="gc gblind"><div class="gr">Hidden until you pick · '+d.length+' left</div>'+blind(x)+'<div class="gbtns"><button class="gb p" data-tk="keep" data-k="'+x.k+'">Keep</button><button class="gb" data-tk="pass" data-k="'+x.k+'">Pass</button></div></div></div>'}
-// Blind card: X official embed widget under a solid cover over the name row and footer, taps blocked until reveal. No unofficial endpoints.
+// Daily Pack: official embed widget (platform.twitter.com/widgets.js) plus free embed data at
+// cdn.syndication.twimg.com. That second path is unofficial and undocumented. It costs $0, but X can
+// change or block it without notice. If it breaks, cards fall back to the saved post text and unrated
+// picks stay blurred. Media expansions stay off. Nothing here calls a paid X or vision API.
+function synd(id, cb){var u="https://cdn.syndication.twimg.com/tweet-result?id="+encodeURIComponent(id)+"&lang=en&token=a";
+ fetch(u,{referrerPolicy:"no-referrer"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){cb(j||null)}).catch(function(){cb(null)})}
 function bdate(s){if(!s)return"";var d=new Date(s+"T12:00:00");return isNaN(d)?s:d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}
 // video.twimg.com refuses requests that carry another site's Referer, so each video plays inside a
 // no-referrer srcdoc frame (real file, real browser controls, nothing links to X)
@@ -115,7 +120,9 @@ function draw(){if(!G){game.innerHTML='<p class="gsub">Game data not built yet.<
  (view==="pack"?'<div class="gsec">Today\'s pack</div><p class="gsub">'+G.pack.length+' creators from this morning\'s Follow Finder picks. Opening X is all the game does.</p><div class="gpack">'+packNow().map(card).join("")+'</div>':
   view==="taste"?'<div class="gsec">Blind taste test</div><p class="gsub">Judge the post on its own. The creator shows after you pick.</p>'+taste():
   view==="rules"?'<div class="gsec">Rules learned</div><p class="gsub">Follow Finder applies these before building the next pack.</p>'+rules():
-  '<div class="gsec">Collection binder</div><p class="gsub">'+G.binder.length+' cards opened. Followed is checked against Follow Audit\'s nightly list.</p>'+binder());lazy()}
+  '<div class="gsec">Collection binder</div><p class="gsub">'+G.binder.length+' cards opened. Followed is checked against Follow Audit\'s nightly list.</p>'+binder());lazy();
+ game.querySelectorAll(".gbfall[data-id], .gemb[data-id]").forEach(function(el){if(el.dataset.synd)return;el.dataset.synd="1";
+  synd(el.dataset.id,function(j){if(!j)return;var t=j.text||j.full_text||"";var box=el.querySelector(".gpost");if(box&&t)box.textContent=t})})}
 game.addEventListener("click",function(e){var t=e.target.closest("[data-v],[data-af],[data-nl],[data-tk],[data-next],[data-undo],[data-open]");if(!t)return;
  if(t.dataset.v){view=t.dataset.v;revealed=null;draw();return}
  if(t.dataset.open){S.binder[t.dataset.open.toLowerCase()]={opened:true,at:new Date().toISOString()};sv("binder");return}

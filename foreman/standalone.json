@@ -1,6 +1,6 @@
 {
   "_about": "Individual bot templates, each with its own ledger and spend cap. They share one X sign-in per Grok Bot computer (/workspace/x-signin/x_signin.json, or a Foreman crew's dispatch/x_signin.json if one exists). Each bot's exact files in the release zip (paths inside foreman/). foreman/fetch_release.sh <tag> --bot <slug> unpacks only these into /workspace/foreman.",
-  "version": "v1.1.2",
+  "version": "v1.2.0",
   "install_targets": {
     "follow-audit/follow_watch.py": "follow-watch",
     "follow-audit/x_prices.py": "follow-watch",
@@ -13,6 +13,7 @@
       "folder": "follow-watch",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -28,7 +29,11 @@
         "follow-audit/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -50,6 +55,7 @@
       "folder": "creator-scout",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -73,7 +79,12 @@
         "follow-finder/game/nsfw/refilter_today.py",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "follow-finder/qol_scout.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -97,6 +108,7 @@
       "folder": "shoutouts",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -113,7 +125,12 @@
         "shoutout-picker/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "shoutout-picker/qol_desk.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -137,6 +154,7 @@
       "folder": "engagement",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -153,7 +171,12 @@
         "reply-queue/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "reply-queue/qol_leads.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -176,6 +199,7 @@
       "folder": "engagement",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -192,7 +216,12 @@
         "fan-finder/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "reply-queue/qol_leads.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -217,6 +246,7 @@
       "folder": "reruns",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -233,7 +263,12 @@
         "rerun-picker/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "follow-audit/weekly_rollup.py",
+        "rerun-picker/qol_rerun.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -255,6 +290,7 @@
       "folder": "x-analytics",
       "files": [
         "README.md",
+        "PATCH-NOTES.md",
         "LICENSE",
         "config.example.json",
         "foreman/standalone.json",
@@ -268,7 +304,12 @@
         "analytics-log/routine.json",
         "site/HOSTING.md",
         "site/publish_lists.py",
-        "site/pages_v11.py"
+        "site/pages_v11.py",
+        "analytics-log/sheets_sync.py",
+        "analytics-log/replies_scorecard.py",
+        "site/radar_collapse.py",
+        "site/qol7_medrt.py",
+        "site/qol7_due.py"
       ],
       "secrets": [],
       "x_scopes": [],

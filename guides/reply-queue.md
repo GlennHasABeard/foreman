@@ -3,12 +3,14 @@
 Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot reply-queue` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
-Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` into `$BOTS_HOME/engagement`. Scripts only, never a sign-in or token file.
+Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` plus `qol_leads.py` into `$BOTS_HOME/engagement`. Scripts only, never a sign-in or token file.
 
 ## Questions
 Ask only these and save them in `$BOTS_HOME/engagement/config.json`: `skip_handles`, `max_cost_per_run`. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Reply Queue notes
+The page is one row per account. The lead is the best item, questions first, with an "N from this account" chip and a "N more from @name" fold. Mute for 24 hours stays in this browser. Questions, emoji/gm/link-only folding, and a "new" chip are on. New Done ticks save `{done: 1, at: time}`. Unticking deletes the mark.
+
 It reads mentions and quotes first and your likes last. If the likes do not finish, items are kept and marked "may already be liked" and the report says so.
 
 ## Cap and ledger

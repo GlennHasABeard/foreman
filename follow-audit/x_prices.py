@@ -95,8 +95,41 @@ def response_cost(path, body, owner_id=None, owned=None):
 
 
 def estimate(**counts):
-    """estimate(owned=10, post=3, user=1, attached_user=2) in dollars."""
+    """estimate(owned=10, post=3, user=1, attached_user=2) in dollars.
+    Unscaled. Spend caps use this, never the scaled display estimate."""
     return sum(RATES[k] * n for k, n in counts.items())
+
+
+# Owned-read display estimates are scaled by the last 7 days' billed/logged ratio.
+# The ratio is capped so a thin week cannot swing the estimate. Caps stay unscaled.
+OWNED_RATIO_MIN = 0.3
+OWNED_RATIO_MAX = 1.5
+
+
+def owned_ratio(billed=None, logged=None):
+    """billed/logged over the last 7 days, capped from 0.3 to 1.5. No history means 1."""
+    try:
+        logged = float(logged or 0)
+        billed = float(billed or 0)
+    except (TypeError, ValueError):
+        return 1.0
+    if logged <= 0:
+        return 1.0
+    return max(OWNED_RATIO_MIN, min(OWNED_RATIO_MAX, billed / logged))
+
+
+def counts(owned=0, post=0, user=0, attached_user=0, ratio=None, billed=None, logged=None):
+    """Scaled display estimate for owned reads. Keeps est_cost_raw.
+
+    Spend caps still use estimate() and worst_case(), which are unscaled.
+    Only the owned portion is multiplied by the billed/logged ratio.
+    """
+    raw = estimate(owned=owned, post=post, user=user, attached_user=attached_user)
+    if ratio is None:
+        ratio = owned_ratio(billed, logged)
+    ratio = max(OWNED_RATIO_MIN, min(OWNED_RATIO_MAX, float(ratio)))
+    owned_raw = RATES["owned"] * owned
+    return {"est_cost": raw - owned_raw + owned_raw * ratio, "est_cost_raw": raw, "owned_ratio": ratio}
 
 
 def table_lines():

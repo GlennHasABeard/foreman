@@ -3,12 +3,16 @@
 Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot shoutout-picker` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
-Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `shoutout-picker/shoutout_desk.py` into `$BOTS_HOME/shoutouts`. Scripts only, never a sign-in or token file.
+Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `shoutout-picker/shoutout_desk.py` plus `qol_desk.py` into `$BOTS_HOME/shoutouts`. Scripts only, never a sign-in or token file.
 
 ## Questions
 Ask only these and save them in `$BOTS_HOME/shoutouts/config.json`: `account_kinds`, `labels`, `min_followers`, `max_followers`, `list_size`, `weekly_goal` (how many shoutout posts a week they aim for, blank is fine). Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Shoutout Picker notes
+Rollover lookup ships **off** (`rollover_lookup: false`). Turning it on runs one batched users/by per rollover and drops deleted or suspended accounts before review. That costs about $0.01 per rollover. Leave it off unless the owner asks.
+
+Every pick shows week N. Week 1 adds "· new" or "· runner-up promoted". `catch-up --dry-run` updates the log from saved posts only, with no X calls. Flagged mutuals marked likely fake, spam signals or never posted are left out and named. `watch`, `inactive` and `dormant` are ranked last. When keeps are short, week adds one extra band of `thin_pool_extra` (20) and stops without saving a second band.
+
 Shoutout Picker needs a follower list. If Follow Audit is installed (`$BOTS_HOME/follow-watch/data/state.json` exists), use it. If not, offer two choices and let the owner pick:
 - Its own follower scan. Show the cost first from the free account read (about $0.65 to $1.00 per 1,000 followers plus following). If it does not fit the cap, offer the one-day raise. Then write `$BOTS_HOME/follow-watch/config.json` (inactive_days and dormant_days, with defaults the owner agrees to) and run `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/follow_watch.py full`. It is booked to Shoutout Picker.
 - Install Follow Audit (`sh fetch_release.sh v1.1.2 --bot follow-audit`), which keeps the list fresh every day.

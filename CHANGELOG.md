@@ -58,7 +58,7 @@ Not published. No git tag and no GitHub release in this change. Install links st
 - Replies scorecard ships **off** (`replies_scorecard.enabled` false).
 
 ### Not in this pack
-- Home free-credit spend UI, Tally sheet chunk helper, Field Notes, X archives, Whetstone, Drafts, and any private owner config.
+- Private owner bots and configs listed in the box-only private exclude list stay on the live bots and are not in this pack.
 
 ## v1.1.2 (2026-10-31)
 Published 2026-10-31. Each template's release notes list only its own section plus "All individual templates".

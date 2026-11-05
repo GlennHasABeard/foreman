@@ -1,0 +1,33 @@
+{
+  "posts": {
+    "r1": {
+      "kind": "reply",
+      "created": "2026-11-05T15:00:00+00:00",
+      "replied_to": "in1",
+      "text": "A lighter first wash. Demo data."
+    }
+  },
+  "events": {
+    "in1": {
+      "kind": "reply",
+      "author": "u-ink",
+      "username": "inkwash_demo",
+      "created": "2026-11-05T14:18:00+00:00",
+      "text": "How do you keep the sky from going muddy? Demo data."
+    }
+  },
+  "users": {
+    "u-ink": {
+      "username": "inkwash_demo"
+    }
+  },
+  "done": {
+    "inkwash_demo": {
+      "done": 1,
+      "on": true,
+      "at": "2026-11-05T15:00:00+00:00",
+      "ts": "2026-11-05T15:00:00+00:00",
+      "inbound": "2026-11-05T14:18:00+00:00"
+    }
+  }
+}

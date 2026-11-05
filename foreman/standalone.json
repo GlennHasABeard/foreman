@@ -39,7 +39,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -96,7 +97,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -148,7 +150,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -200,7 +203,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -251,7 +255,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -304,7 +309,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [
         "X_CLIENT_ID",
@@ -351,7 +357,8 @@
         "demo/juniper/profile.json",
         "demo/juniper/pages.json",
         "demo/juniper/marks.json",
-        "demo/juniper/game.json"
+        "demo/juniper/game.json",
+        "demo/juniper/median.json"
       ],
       "secrets": [],
       "x_scopes": [],

@@ -386,6 +386,16 @@ class N55Gaps(unittest.TestCase):
         self.assertTrue(got["kept"])
 
 
+class PrivateGateWording(unittest.TestCase):
+    def test_changelog_has_no_private_markers(self):
+        banned = ("Field Notes", "Whetstone")
+        for name in ("CHANGELOG.md", "CHANGES-next.md"):
+            text = open(os.path.join(ROOT, name), encoding="utf-8").read()
+            for word in banned:
+                self.assertNotIn(word, text)
+            self.assertIn("box-only private exclude list", text)
+
+
 class DemoJuniper(unittest.TestCase):
     def test_profile_shape(self):
         sys.path.insert(0, os.path.join(ROOT, "site"))
@@ -405,6 +415,11 @@ class DemoJuniper(unittest.TestCase):
         self.assertIn("LIVE", sample["note"])
         done = demo_juniper.marks()["done"]
         self.assertTrue(any(v.get("done") == 1 and v.get("at") for v in done.values()))
+        med = demo_juniper.median_inputs()
+        sys.path.insert(0, os.path.join(ROOT, "site"))
+        import qol7_medrt
+        line = qol7_medrt.publish_line(med["posts"], med["events"], med["done"], med["users"])
+        self.assertIn("42 min", line)
 
 
 if __name__ == "__main__":

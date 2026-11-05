@@ -151,11 +151,31 @@ def pages(labels):
     }
 
 
+# Inbound at 14:18, Done at 15:00. qol7_medrt measures that gap as 42 minutes.
+INBOUND_AT = "2026-11-05T14:18:00+00:00"
+DONE_AT = "2026-11-05T15:00:00+00:00"
+
+
+def median_inputs():
+    """Posts, inbound events, and a Done mark qol7_medrt can time.
+
+    The Done mark is {done: 1, at: ISO} plus the inbound time it answers.
+    """
+    who = _demo("inkwash")
+    done = {who: {"done": 1, "on": True, "at": DONE_AT, "ts": DONE_AT, "inbound": INBOUND_AT}}
+    events = {"in1": {"kind": "reply", "author": "u-ink", "username": who, "created": INBOUND_AT,
+                      "text": "How do you keep the sky from going muddy? Demo data."}}
+    posts = {"r1": {"kind": "reply", "created": DONE_AT, "replied_to": "in1",
+                    "text": "A lighter first wash. Demo data."}}
+    users = {"u-ink": {"username": who}}
+    return {"posts": posts, "events": events, "users": users, "done": done}
+
+
 def marks():
-    """Home Reply Queue cards read these done marks. One person is already Done."""
-    at = FIXED.isoformat()
-    return {"never": {}, "done": {_demo("inkwash"): {"on": True, "done": 1, "at": at, "ts": at}},
-            "stages": {}, "notes": {}, "follow_ups": {}}
+    """Home and Reply Queue read these done marks. inkwash_demo is Done, 42 minutes after the inbound post."""
+    base = {"never": {}, "stages": {}, "notes": {}, "follow_ups": {}}
+    base["done"] = median_inputs()["done"]
+    return base
 
 
 def game_sample(pool, labels):
@@ -186,6 +206,9 @@ def _write(path, obj):
 def render_html(payload, home_marks):
     sys.path.insert(0, HERE)
     import pages_v11 as P
+    import qol7_medrt
+    med = payload["median"]
+    med_line = qol7_medrt.publish_line(med["posts"], med["events"], med["done"], med["users"])
     nav = [("Home", "index.html"), ("Reply Queue", "reply-queue.html"), ("Fan Finder", "fan-finder.html"),
            ("Follow Finder", "follow-finder.html"), ("Shoutout Picker", "shoutout-picker.html"),
            ("Rerun Picker", "rerun-picker.html"), ("Follow Audit", "follow-audit.html"),
@@ -195,7 +218,7 @@ def render_html(payload, home_marks):
     os.makedirs(html_dir, exist_ok=True)
     pages = payload["pages"]
     bodies = {
-        "Reply Queue": P.reply_queue(pages["reply-queue"], {"lines": []}, {}, None),
+        "Reply Queue": P.reply_queue(pages["reply-queue"], {"lines": [med_line]}, {}, None),
         "Fan Finder": P.fan_finder(pages["fan-finder"]["rows"], {"lines": [pages["fan-finder"]["backlog"]]}, {}),
         "Follow Finder": P.follow_finder(pages["follow-finder"], {"lines": ["40 kept in the free pre-screen"]}, False),
         "Shoutout Picker": P.shoutout_picker(pages["shoutout-picker"], {"lines": []}, False),
@@ -240,8 +263,32 @@ def readme(labels):
         "Those labels are stored as the cut returned them.",
         "",
         "Home done marks include @inkwash_demo so a Home card can show Done.",
+        "That Done mark is {done: 1, at: 2026-11-05T15:00:00+00:00} for an inbound post at 14:18,",
+        "so the Reply Queue median is 42 min. See median.json.",
+        "",
+        "Publish that page from this fixture, still with no Game LIVE flag:",
+        "",
+        "    BOTS_HOME=demo/juniper/bots SITE_DIR=demo/juniper/published LISTS_DEMO=1 python3 site/publish_lists.py --dry-run",
         "",
     ])
+
+
+def write_bots(pages, med):
+    """A tiny bots home so publish_lists can rebuild reply-queue.html from this fixture."""
+    eng = os.path.join(OUT, "bots", "engagement")
+    os.makedirs(os.path.join(eng, "reports"), exist_ok=True)
+    os.makedirs(os.path.join(eng, "data"), exist_ok=True)
+    _write(os.path.join(eng, "config.json"), {"timezone": "UTC"})
+    open(os.path.join(eng, ".individual-reply-queue"), "w").close()
+    _write(os.path.join(eng, "posts.json"), med["posts"])
+    _write(os.path.join(eng, "events.json"), med["events"])
+    _write(os.path.join(eng, "users.json"), med["users"])
+    _write(os.path.join(eng, "data", "chat_store-reply-queue.json"), {
+        "never": {}, "hide_until": {}, "stages": {}, "notes": {}, "events": [], "done": med["done"],
+    })
+    data = json.dumps(pages["reply-queue"], ensure_ascii=False).replace("</", "<\\/")
+    with open(os.path.join(eng, "reports", "mention_radar.html"), "w", encoding="utf-8") as f:
+        f.write("<!doctype html><script>const DATA=" + data + ";\nfunction noop(){}\n</script>\n")
 
 
 def main():
@@ -249,15 +296,19 @@ def main():
     labels = rarity_labels(pool)
     if not any(lab["rarity"] == "Legendary" for lab in labels.values()):
         raise SystemExit("Demo pool produced no Legendary card. Fix the scores instead of relabeling.")
+    med = median_inputs()
     payload = {
         "profile": profile(),
         "pages": pages(labels),
         "marks": marks(),
+        "median": med,
         "rarity": labels,
     }
     _write(os.path.join(OUT, "profile.json"), payload["profile"])
     _write(os.path.join(OUT, "pages.json"), payload["pages"])
     _write(os.path.join(OUT, "marks.json"), payload["marks"])
+    _write(os.path.join(OUT, "median.json"), med)
+    write_bots(payload["pages"], med)
     _write(os.path.join(OUT, "game.json"), game_sample(pool, labels))
     render_html(payload, payload["marks"])
     with open(os.path.join(OUT, "README.md"), "w", encoding="utf-8") as f:

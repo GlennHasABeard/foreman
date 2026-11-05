@@ -48,8 +48,5 @@ The diff cannot tell which side is newer. These were the live behaviors the temp
 
 ## Not ported
 
-- n51 Home free-credit Spend UI.
-- n34 Tally Posts sheet chunk helper.
-- Field Notes, X archives, Whetstone, Drafts, and any private owner config.
-- Anything under a private exclude list.
+- Private owner bots and configs listed in the box-only private exclude list stay on the live bots and are not in this pack.
 - Git tag, GitHub release, and zip. Those wait until this prep is reviewed.

@@ -2,9 +2,9 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
-## v1.2.0 (prep, not tagged)
+## v1.2.0 (2026-11-05)
 
-Not published. No git tag and no GitHub release in this change. Install links stay on the last tagged release until that release is cut.
+Install pins point at v1.2.0.
 
 ### All individual templates
 - Pack version in `foreman/standalone.json` is v1.2.0.

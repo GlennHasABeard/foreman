@@ -92,7 +92,7 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 Get the Foreman template: [Foreman](https://x.ai/bot/Hfm0xbUx8FqPTd5EYvjat)
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.1.2` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.1.2, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.1.2` to do the same.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.2.0` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.2.0, checks the zip with `sha256sum` and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. You can also run `sh foreman/fetch_release.sh v1.2.0` to do the same.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -129,7 +129,7 @@ Each of the seven bots is also its own template. Open the bot's template link be
 - [Rerun Picker](https://x.ai/bot/M2jbahUCQCsNqdgGxAIj2)
 - [Analytics Log](https://x.ai/bot/TuAu34Lz2_zupuT5qlai3)
 
-The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.1.2 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
+The bot waits until you type "start setup" and does nothing before that. Then it runs `sh foreman/fetch_release.sh v1.2.0 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a short setup guide in `guides/<slug>.md`.
 
 What's new in v1.1 for individual templates (each template's release notes list only what it got, see PATCH-NOTES.md):
 
@@ -138,12 +138,11 @@ What's new in v1.1 for individual templates (each template's release notes list 
 - Spend: each template keeps its own cap, month forecast and weekly cost digest. Estimate next to what X billed needs console.x.com signed in in the bot's browser. Without it, spend shows as labeled estimates and setup says once how to turn on the billed check.
 - Shared: update notice, attached profiles at $0, refused reads say so (never a quiet 0), sign-in check after a box restore, shared publish cache with OK/failed log, short chat reports with the page link, light and dark pages with real buttons and Last updated, a shared profile cache when more than one bot is here, and suggested run times 20 minutes apart.
 
-What's new in v1.2.0 (prep, full notes in PATCH-NOTES.md and CHANGELOG.md):
+What's new in v1.2.0 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 
 - Follow Finder Game stays off until you say "turn on Game". Blind cards may read X's free unofficial embed at cdn.syndication.twimg.com. If that breaks, cards fall back to the saved post text. Media expansions stay off.
 - Analytics Log: 500K leave-window card (already in the pack), `seal` instead of `finish`, tracker upsert, replies scorecard **off** until you turn it on.
 - Shoutout rollover lookup **off** (about $0.01 per rollover if you turn it on). Language shares in Follow Finder are floors, not caps.
-- The published install pin in this README stays on the last tagged release until v1.2.0 is tagged. Do not download from main.
 
 What's new in v1.1.2 (full notes in CHANGELOG.md):
 

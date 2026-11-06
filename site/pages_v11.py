@@ -161,7 +161,12 @@ def store_to_marks(store):
     for h, ts in (store.get("hide_until") or {}).items():
         m["never"].setdefault(h, {"on": False, "ts": "", "until": ts})
     for h, ts in (store.get("done") or {}).items():
-        m["done"][h] = {"on": True, "ts": _iso(ts)}
+        if isinstance(ts, dict):
+            at = ts.get("at") or ts.get("ts") or ""
+            on = bool(ts.get("done", ts.get("on", True)))
+            m["done"][h] = {"on": on, "done": 1 if on else 0, "at": at, "ts": at}
+        else:
+            m["done"][h] = {"on": True, "done": 1, "at": _iso(ts), "ts": _iso(ts)}
     for h, st in (store.get("stages") or {}).items():
         m["stages"][h] = st if isinstance(st, dict) else {"stage": st, "ts": ""}
     for h, ns in (store.get("notes") or {}).items():
@@ -265,6 +270,9 @@ def reply_queue(items, saved, post_text=None, sensitive=None):
                      "chips": [c.get("t", "") for c in x.get("chips") or []][1:], "text": x.get("text", ""),
                      "open": (x.get("links") or [{}])[0].get("u", ""), "your": your, "reg": regs.get(x.get("username", "").lower(), 0),
                      "g": x.get("g", ""), "s": 1 if str(x.get("key", "")) in sensitive else 0,
+                     "q": 1 if x.get("question") else 0, "nw": 1 if x.get("new") else 0,
+                     "more": int(x.get("more") or 0), "fold": x.get("fold") or [],
+                     "low": 1 if x.get("low") else 0, "thread": 1 if x.get("thread") else 0,
                      "p": your.rstrip("/").split("/")[-1].split("?")[0] if your else ""})
     drown = sorted(((len(v), p, v) for p, v in posts.items()), reverse=True)[:5]
     med = next((l for l in (saved or {}).get("lines", []) if l.startswith("Median time to reply")), "Median time to reply: no done marks yet")
@@ -280,12 +288,15 @@ def reply_queue(items, saved, post_text=None, sensitive=None):
             + (f'<h2>Drowning posts</h2><ul class="plain">{dr}</ul>' if dr else "")
             + '<h2>Queue</h2><div class="tools"><div class="seg" id="rq-f">'
             + "".join(f'<button type="button" data-f="{f}" class="{"on" if f == "all" else ""}">{t}</button>'
-                      for f, t in (("all", "All"), ("mention", "Mentions"), ("reply", "Replies"), ("quote", "Quotes"), ("regular", "Regulars")))
-            + '</div><select id="rq-s" aria-label="Sort"><option value="m">Mentions first</option><option value="new">Newest</option>'
+                      for f, t in (("all", "All"), ("new", "New since last run"), ("questions", "Questions"),
+                                   ("mention", "Mentions"), ("reply", "Replies"), ("quote", "Quotes"), ("regular", "Regulars")))
+            + '</div><select id="rq-s" aria-label="Sort"><option value="q">Questions first, then newest</option>'
+              '<option value="m">Mentions first</option><option value="new">Newest</option>'
               '<option value="old">Oldest</option><option value="reg">Regulars first</option></select>'
               '<label class="note"><input type="checkbox" id="rq-done"> show done</label></div><div id="rq-list"></div>'
+              '<h2>Muted for now</h2><div id="rq-muted"></div>'
             + data_script("rq-data", rows) + "<script>" + r"""
-(function(){var D=JSON.parse(document.getElementById("rq-data").textContent),V=window.V11,f="all",s="m";
+(function(){var D=JSON.parse(document.getElementById("rq-data").textContent),V=window.V11,f=D.some(function(x){return x.nw})?"new":"all",s="q";
 function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
 var SHOWN={},W=null;
 function wj(){if(W)return W;W=new Promise(function(ok,no){var s=document.createElement("script");s.src="https://platform.twitter.com/widgets.js";s.async=true;s.charset="utf-8";s.onload=function(){window.twttr&&twttr.ready?twttr.ready(function(){ok(twttr)}):no()};s.onerror=no;document.head.appendChild(s)});return W}
@@ -300,21 +311,31 @@ function load(el){if(el.dataset.done||el.classList.contains("sens"))return;el.da
  mk(el.querySelector(".rbx"),el.dataset.id,function(ok){var c=el.closest(".card");if(ok){c&&c.classList.add("emb-ok")}else{el.querySelector(".rno").hidden=false}})}
 var IO="IntersectionObserver" in window?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IO.unobserve(e.target);load(e.target)}})},{rootMargin:"400px"}):null;
 function watch(){document.querySelectorAll("#rq-list .remb").forEach(function(el){if(!el.classList.contains("sens"))IO?IO.observe(el):load(el)})}
-function card(x){var done=V.on("done",x.u),dr=localStorage.getItem("v11-draft-"+x.k)||"";
+function mutes(){try{return JSON.parse(localStorage.getItem("rq-mute")||"{}")}catch(e){return {}}}
+function muted(h){var m=mutes()[(h||"").toLowerCase()];return !!(m&&new Date(m)>new Date())}
+function card(x){var done=x.u&&V.on("done",x.u);
+ var more=x.more?'<button type="button" data-more="'+esc(x.u)+'">'+x.more+' more from @'+esc(x.u)+'</button>':'';
+ var fold=(x.fold||[]).map(function(n){return '<div class="note">'+esc(n.text||"")+'</div>'}).join("");
  return '<div class="card'+(done?' done':'')+'" data-h="'+esc(x.u)+'"><div class="row"><div class="grow">'+
- '<a class="who" href="https://x.com/'+esc(x.u)+'" target="_blank" rel="noopener">@'+esc(x.u)+'</a> <span class="nm">'+esc(x.kind)+'</span>'+
+ (x.u?'<a class="who" href="https://x.com/'+esc(x.u)+'" target="_blank" rel="noopener">@'+esc(x.u)+'</a> ':'')+'<span class="nm">'+esc(x.kind)+'</span>'+
  '<div class="chips">'+(x.reg?'<span class="chip strong">Regular · '+x.reg+' conversations</span>':'')+
  x.chips.map(function(c){return '<span class="chip">'+esc(c)+'</span>'}).join("")+'</div>'+
- '<div class="txt">'+esc(x.text)+'</div>'+emb(x)+
- '<div class="btns"><a class="btn pri" data-act="like" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id='+encodeURIComponent(x.k)+'">Like</a>'+
- '<a class="btn" data-act="open" target="_blank" rel="noopener" href="'+esc(x.open)+'">Open</a>'+
- '<button type="button" data-done="'+esc(x.u)+'">'+(done?'Done ✓':'Mark done')+'</button></div></div></div></div>'}
-function render(){var L=D.filter(function(x){return (f==="all"||(f==="regular"?x.reg>0:x.kind===f))&&
- (document.getElementById("rq-done").checked||!V.on("done",x.u))});
- L.sort(function(a,b){if(s==="m")return (b.kind==="mention")-(a.kind==="mention")||a.i-b.i;if(s==="old")return b.i-a.i;
+ '<div class="txt">'+esc(x.text)+'</div>'+(x._open?fold:'')+emb(x)+
+ '<div class="btns">'+(x.low?'':('<a class="btn pri" data-act="like" target="_blank" rel="noopener" href="https://x.com/intent/like?tweet_id='+encodeURIComponent(x.k)+'">Like</a>'+
+ '<a class="btn" data-act="open" target="_blank" rel="noopener" href="'+esc(x.open)+'">Open</a>'))+
+ (x.u?'<button type="button" data-done="'+esc(x.u)+'">'+(done?'Done ✓':'Mark done')+'</button>':'')+
+ more+(x.u?'<button type="button" data-mute="'+esc(x.u)+'">Mute @'+esc(x.u)+' for 24h</button>':'')+
+ (x.thread?'<button type="button" data-mute="thread:'+esc(x.k)+'">Mute this thread</button>':'')+
+ '</div></div></div></div>'}
+function render(){var box=document.getElementById("rq-f");if(box)box.querySelectorAll("button").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-f")===f)});
+ var L=D.filter(function(x){return !muted(x.u)&&(f==="all"||f==="new"&&x.nw||f==="questions"&&x.q||f==="regular"&&x.reg>0||x.kind===f)&&
+ (document.getElementById("rq-done").checked||!x.u||!V.on("done",x.u))});
+ L.sort(function(a,b){if(s==="q")return (b.q-a.q)||a.i-b.i;if(s==="m")return (b.kind==="mention")-(a.kind==="mention")||a.i-b.i;if(s==="old")return b.i-a.i;
   if(s==="reg")return b.reg-a.reg||a.i-b.i;return a.i-b.i});
  document.getElementById("rq-list").innerHTML=L.map(card).join("")||'<p class="note">Nothing waiting. Nice.</p>';watch();
- document.getElementById("rq-open").textContent=D.filter(function(x){return !V.on("done",x.u)}).length}
+ var M=D.filter(function(x){return x.u&&muted(x.u)});
+ var slot=document.getElementById("rq-muted");if(slot)slot.innerHTML=M.map(function(x){return '<div class="card row"><div class="grow"><b>@'+esc(x.u)+'</b> <span class="nm">muted for now</span></div><button type="button" data-unmute="'+esc(x.u)+'">Undo</button></div>'}).join("")||'<p class="note">Nobody muted.</p>';
+ document.getElementById("rq-open").textContent=D.filter(function(x){return x.u&&!V.on("done",x.u)&&!muted(x.u)}).length}
 V.renderers.push(render);
 document.getElementById("rq-f").onclick=function(e){var b=e.target.closest("button");if(!b)return;f=b.getAttribute("data-f");
  this.querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x===b)});render()};
@@ -323,8 +344,12 @@ document.getElementById("rq-list").addEventListener("click",function(e){var r=e.
  if(r){e.preventDefault();var el=r.closest(".remb");if(r.hasAttribute("data-rshow")){SHOWN[el.dataset.id]=1;el.classList.remove("sens");r.remove();load(el)}
   else{var c=el.querySelector(".rctxb");if(c.dataset.on){c.innerHTML="";delete c.dataset.on;r.textContent="Show context"}
    else{c.dataset.on=1;r.textContent="Hide context";c.innerHTML='<div class="rbx"></div>';mk(c.firstChild,el.dataset.p,function(ok){if(!ok)c.innerHTML='<p class="note">Context post did not load. Open it on X.</p>'})}}return}
+ var um=e.target.closest("[data-unmute]");if(um){var m=mutes();delete m[um.getAttribute("data-unmute").toLowerCase()];localStorage.setItem("rq-mute",JSON.stringify(m));render();return}
+ var mu=e.target.closest("[data-mute]");if(mu){var m=mutes();m[mu.getAttribute("data-mute").toLowerCase()]=new Date(Date.now()+864e5).toISOString();localStorage.setItem("rq-mute",JSON.stringify(m));render();return}
+ var mo=e.target.closest("[data-more]");if(mo){var h=mo.getAttribute("data-more");D.forEach(function(x){if(x.u===h)x._open=!x._open});render();return}
  var b=e.target.closest("[data-done]");if(!b)return;var h=b.getAttribute("data-done");
- var was=V.on("done",h);V.set("done",h,{on:!was});if(!was)V.toast("Marked @"+h+" done.",function(){V.set("done",h,{on:false})})});
+ var was=V.on("done",h);if(was){delete V.m.done[h.toLowerCase()];V.save();V.render()}else{var at=new Date().toISOString();V.set("done",h,{on:true,done:1,at:at});V.toast("Marked @"+h+" done.",function(){delete V.m.done[h.toLowerCase()];V.save();V.render()})}});
+var mutedBox=document.getElementById("rq-muted");if(mutedBox)mutedBox.addEventListener("click",function(e){var um=e.target.closest("[data-unmute]");if(!um)return;var m=mutes();delete m[um.getAttribute("data-unmute").toLowerCase()];localStorage.setItem("rq-mute",JSON.stringify(m));render()});
 })();</script>""")
     return body
 
@@ -341,7 +366,9 @@ def fan_finder(items, saved, store):
     for h in (store.get("never") or {}):
         left.append({"u": h, "why": "you hid them", "until": ""})
     extra_left = ((saved or {}).get("extra") or {}).get("left_out") or []
-    body = ("".join(f'<p class="note">{E(l)}</p>' for l in lines if "pull" in l.lower() or "likes" in l.lower())
+    body = ("".join(f'<p class="note">{E(l)}</p>' for l in lines
+                    if "pull" in l.lower() or "likes" in l.lower() or "still engaging" in l.lower()
+                    or l.lower().startswith("capped pull"))
             + '<div class="tools"><div class="seg" id="ff-st">'
             + "".join(f'<button type="button" data-s="{s}" class="{"on" if s == "all" else ""}">{s.title()}</button>'
                       for s in ("all", "new", "engaged", "talked", "done"))
@@ -427,7 +454,7 @@ def no_paid(line):
 
 def shoutout_picker(items, saved, write_ok):
     rows = [{"u": x.get("username", ""), "f": x.get("followers") or 0, "l": x.get("label") or "", "p": x.get("sample_post") or "",
-             "w": x.get("weeks_listed") or 0, "note": x.get("note") or ""} for x in items or []]
+             "w": x.get("weeks_listed") or 0, "wk": x.get("week_label") or "", "note": x.get("note") or ""} for x in items or []]
     lines = (saved or {}).get("lines", [])
     bench = [l for l in lines if "bench" in l.lower()]
     skips = [l for l in lines if l.startswith("Left out")]
@@ -450,7 +477,7 @@ function render(){var d=D.filter(function(x){return V.on("done",x.u)}).length;do
  document.getElementById("so-list").innerHTML=D.filter(function(x){var o=V.on("done",x.u);return f==="all"||(f==="d")===o}).map(function(x){var o=V.on("done",x.u);
  return '<div class="card'+(o?' done':'')+'" data-h="'+esc(x.u)+'"><div class="row"><div class="grow"><a class="who" target="_blank" rel="noopener" href="https://x.com/'+esc(x.u)+'">@'+esc(x.u)+
  '</a><div class="chips">'+(x.l?'<span class="chip strong">'+esc(x.l)+'</span>':'')+'<span class="chip">'+x.f.toLocaleString()+' followers</span>'+
- (x.w?'<span class="chip">listed '+x.w+' weeks</span>':'')+(x.note?'<span class="chip">'+esc(x.note)+'</span>':'')+'</div>'+
+ (x.wk?'<span class="chip">'+esc(x.wk)+'</span>':(x.w>1?'<span class="chip">week '+x.w+'</span>':'<span class="chip">week 1 · new</span>'))+(x.note?'<span class="chip">'+esc(x.note)+'</span>':'')+'</div>'+
  (x.p?'<a class="note" target="_blank" rel="noopener" href="'+esc(x.p)+'">Sample post</a>':'')+'</div>'+
  '<div class="seg"><button type="button" data-st="'+esc(x.u)+'" data-v="0" class="'+(o?'':'on')+'">Pending</button><button type="button" data-st="'+esc(x.u)+'" data-v="1" class="'+(o?'on':'')+'">Done</button></div></div></div>'}).join("")}
 V.renderers.push(render);
@@ -577,8 +604,9 @@ def panel(pid, title, href, body):
             f'<button type="button" data-mv="hide">Show / hide</button></div></div>{body}</div>')
 
 
-def home(panels, people, top_fans, strip):
-    """panels: [(id, title, href, body_html)]. people: {handle: {"bots":[..], "ev":[{d,b,t}]}}."""
+def home(panels, people, top_fans, strip, due_names=None):
+    """panels: [(id, title, href, body_html)]. people: {handle: {"bots":[..], "ev":[{d,b,t}]}}.
+    due_names is the Due today calendar, separate from bot health."""
     tf = ""
     if top_fans is not None:
         tf = panel("p-topfans", "Top fans", "", "<ul class='plain'>" + "".join(
@@ -586,10 +614,12 @@ def home(panels, people, top_fans, strip):
             for h, w in top_fans) + "</ul>" if top_fans else '<p class="note">No fans counted yet.</p>')
     fu = panel("p-followups", "Follow-ups due", "", '<ul class="plain" id="fu-list"></ul>'
                '<p class="note">Tap any @name for their timeline, notes and follow-up.</p>')
+    due_body = ("<ul class='plain'>" + "".join(f"<li>{E(n)}</li>" for n in due_names) + "</ul>") if due_names else '<p class="note">Nothing due today.</p>'
+    due = panel("p-due", "Due today", "", due_body)
     tiles = "".join(f'<div class="tile"><b>{E(str(v))}</b><span>{E(k)}</span></div>' for k, v in strip)
     return (f'<div class="tiles strip">{tiles}</div><div class="tools"><button type="button" id="cust">Customize</button>'
             f'<span class="note">Reorder or hide panels. Saved on this device and, when hosted, across devices.</span></div>'
-            f'<div id="panels">{fu}{tf}' + "".join(panel(*p) for p in panels) + '</div><aside class="drawer" id="drawer"></aside>'
+            f'<div id="panels">{due}{fu}{tf}' + "".join(panel(*p) for p in panels) + '</div><aside class="drawer" id="drawer"></aside>'
             + data_script("home-people", people) + f"<script>{HOME_JS}</script>")
 
 
@@ -672,7 +702,7 @@ def home_shoutouts(rows, marks):
     """This week's picks with Done. Done saves to the Shoutout Picker page marks (same KV key)."""
     if not rows:
         return '<p class="note">No picks this week.</p>'
-    items = [{"u": x.get("username", ""), "f": x.get("followers") or 0} for x in rows]
+    items = [{"u": x.get("username", ""), "f": x.get("followers") or 0, "wk": x.get("week_label") or ""} for x in rows]
     return ('<div id="hso-list"></div>' + data_script("hso-data", items) + data_script("hso-marks", marks) + "<script>" + r"""
 (function(){var D=JSON.parse(document.getElementById("hso-data").textContent),V=window.V11,LK="v11-marks-shoutout-picker",
 API="/api/checks?page=marks-shoutout-picker",M={never:{},done:{},stages:{},notes:{},follow_ups:{}};
@@ -681,7 +711,7 @@ function esc(t){var d=document.createElement("div");d.textContent=t;return d.inn
 function on(h){var e=M.done[h.toLowerCase()];return !!(e&&e.on)}
 function render(){document.getElementById("hso-list").innerHTML=D.map(function(x){var o=on(x.u);
  return '<div class="item row'+(o?' done':'')+'"><div class="grow"><a class="who" target="_blank" rel="noopener" href="https://x.com/'+esc(x.u)+'">@'+esc(x.u)+
- '</a> <span class="nm">'+x.f.toLocaleString()+' followers</span></div><button type="button" class="'+(o?'on':'')+'" data-hso="'+esc(x.u)+'">'+(o?'Done ✓':'Done')+'</button></div>'}).join("")}
+ '</a> <span class="nm">'+x.f.toLocaleString()+' followers'+(x.wk?' · '+esc(x.wk):'')+'</span></div><button type="button" class="'+(o?'on':'')+'" data-hso="'+esc(x.u)+'">'+(o?'Done ✓':'Done')+'</button></div>'}).join("")}
 function save(){try{localStorage.setItem(LK,JSON.stringify(M))}catch(e){}
  if(V.hosted&&!V.preview)fetch(API,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(M)}).catch(function(){V.offline()})}
 if(V.hosted&&!V.preview)fetch(API,{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(s){if(s&&typeof s==="object"){V.merge(M,s);render()}}).catch(function(){});

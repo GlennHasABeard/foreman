@@ -1,9 +1,9 @@
 # Follow Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
-Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `follow-finder/creator_scout.py` into `$BOTS_HOME/creator-scout`. Scripts only, never a sign-in or token file.
+Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `follow-finder/creator_scout.py` plus `qol_scout.py` into `$BOTS_HOME/creator-scout`. Scripts only, never a sign-in or token file.
 
 ## Questions
 Ask only these and save them in `$BOTS_HOME/creator-scout/config.json`: `niche_queries`, `min_followers`, `max_followers`, `verified_only`, `adult_filter`, `exclude_terms`, `shortlist_size`, `max_cost_per_run`. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
@@ -49,9 +49,12 @@ What this bot got in v1.1:
 - Stats strip: kept, dropped free, paid checks skipped.
 - Free pre-screen drops out-of-range, already followed, already shown, never-show and filtered accounts before any paid check.
 - Language and size quotas are the owner's own settings (`language_quota`, `size_quota`), off by default. Never set one unless the owner asks.
+- `lang_balance` shares are floors, not caps. A listed language is kept up to at least its share when enough are available, and there is no upper limit. `lang_balance_slack` is unused and kept so older configs still load. `size_bands` are floors filled after the language floor. They never push a language under its floor.
+- After `sensitive_rest.fails` (3) sensitive-media fails, that account rests `sensitive_rest.days` (30) and is skipped before any paid lookup.
+- The free pre-screen also drops casino or betting, AI tool or product, promo or giveaway, and glamour, plus any `offtopic_terms` you add. Matches are whole words.
 - Engagement-per-follower chip and sort by engagement. The follows-you chip shows only when Follow Audit is installed.
 - Never show tab with undo, and Returning soon from the 60-day rest.
 
 ## Game tab (off by default)
 Say "turn on Game" to add a daily Game tab to the Follow Finder page: a Daily Pack of 5, a Blind Taste Test, Not like this rules with Undo, and a score that counts only follows Follow Audit confirms. Notes on rules that can only be partly checked stay on Rules learned. Daily Pack cards do not show them. It costs $0 unless you turn on the optional image check. The NSFW filter is always on. Say `not like @name because ...`, `undo rule ...` or `already following @name` in chat any time.
-**Embeds and images:** the Game uses only X's official embed widget (`platform.twitter.com/widgets.js`). No unofficial endpoints. The Blind Taste Test shows the official embed under a solid cover over the name row and footer, with taps blocked until Keep or Pass. Images stay blurred behind Tap to show until checked. The optional image check (`game_image_check` in config.json, **off by default**) reads each unrated pick's best post once with X media expansions so the bot can look at the images. It costs one post read plus one attached profile per pick at the crew's price table rates (about $0.005 per pick today). `daily_vision.py cost` prints the exact cost first, and `prep` reads nothing without `--yes`.
+**Embeds and images:** the Game stays off until you say "turn on Game". The Daily Pack uses X's free embed widget (`platform.twitter.com/widgets.js`). Blind cards and vision sheets also read the free embed data at `cdn.syndication.twimg.com`. That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall back to the saved post text and unrated picks stay blurred. Media expansions stay off. The optional image check (`game_image_check`, **off by default**) builds contact sheets from that free embed. `prep` reads nothing without `--yes`.

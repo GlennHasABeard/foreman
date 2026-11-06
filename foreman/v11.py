@@ -215,7 +215,7 @@ def handle(text, name=None, post_times=None):
             s["stages"][h] = {"stage": m.group(2).lower(), "ts": t}
             msg = f"@{h} is now {m.group(2).lower()}."
         elif kind == "done":
-            s["done"][h] = t
+            s["done"][h] = {"done": 1, "at": t}
             s.setdefault("tombstones", {}).pop("done:" + h, None)
             msg = f"Marked @{h} done."
         elif kind == "pending":
@@ -269,8 +269,11 @@ def merge_kv(kv, name=None):
             mine = max(_when(s[kind].get(h)), _when(tomb.get(f"{kind}:{h}")))
             if _when(ts) <= mine and (s[kind].get(h) or tomb.get(f"{kind}:{h}")):
                 continue
-            if e.get("on", True):
-                s[kind][h] = ts or now().isoformat(timespec="seconds")
+            if e.get("on", True) or (kind == "done" and e.get("done")):
+                if kind == "done":
+                    s[kind][h] = {"done": 1, "at": e.get("at") or ts or now().isoformat(timespec="seconds")}
+                else:
+                    s[kind][h] = ts or now().isoformat(timespec="seconds")
                 tomb.pop(f"{kind}:{h}", None)
                 if kind == "never":
                     s["hide_until"].pop(h, None)
@@ -349,17 +352,45 @@ def done_pending(handles, name=None):
     return {"done": [h for h in hs if h in done], "pending": [h for h in hs if h not in done]}
 
 
+def _done_clock(mark):
+    """Time on a Done mark. {done:1, at:ISO} and a plain ISO string both count. A bare 1 does not."""
+    if isinstance(mark, dict):
+        if "done" in mark and not mark.get("done"):
+            return None
+        return mark.get("at") or mark.get("ts") or None
+    if isinstance(mark, str) and mark not in ("1", "true", "True"):
+        return mark
+    return None
+
+
 def median_reply(post_times, days, name=None, at=None):
     """Median minutes from post time to the done mark, for done marks in the last `days`.
     post_times: {handle: iso time of the item}. Works from chat marks or KV marks alike."""
     at = at or now()
     mins = []
-    for h, dt in load_store(name)["done"].items():
-        d = datetime.fromisoformat(dt)
+    for h, mark in load_store(name)["done"].items():
+        clock = _done_clock(mark)
+        if not clock:
+            continue
+        d = datetime.fromisoformat(clock)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=UTC)
         p = post_times.get(h)
         if p and at - d <= timedelta(days=days):
-            mins.append((d - datetime.fromisoformat(p)).total_seconds() / 60)
+            posted = datetime.fromisoformat(p)
+            if posted.tzinfo is None:
+                posted = posted.replace(tzinfo=UTC)
+            mins.append((d - posted).total_seconds() / 60)
     return statistics.median(mins) if mins else None
+
+
+def capped_pull(skipped, cap):
+    """One line for any pull a cost cap stopped. Shown in run notes, runs.json and status."""
+    try:
+        shown = f"${float(cap):.2f}"
+    except (TypeError, ValueError):
+        shown = f"${cap}"
+    return f"Capped pull: skipped {skipped} (cost cap {shown} reached)"
 
 
 def median_line(post_times, name=None):
@@ -605,6 +636,21 @@ def prescreen(cands, settings):
             drops[why] = drops.get(why, 0) + 1
         else:
             keep.append(c)
+    if settings.get("lang_balance") or settings.get("size_bands"):
+        # Floors, not caps. lang_balance_slack is unused and kept so old configs load.
+        here = os.path.dirname(os.path.abspath(__file__))
+        scout = os.path.join(here, "..", "follow-finder")
+        if scout not in sys.path:
+            sys.path.insert(0, scout)
+        try:
+            import qol_scout
+            keep = qol_scout.select_shortlist(
+                keep, settings.get("shortlist_size") or len(keep),
+                settings.get("lang_balance"), settings.get("size_bands"),
+                settings.get("lang_balance_slack"))
+        except Exception:
+            pass
+        return keep, drops
     q = settings.get("language_quota")  # e.g. {"lang": "xx", "max_share": 0.33}; None by default
     if q:
         cap = int(len(keep) * q["max_share"]) or 1

@@ -36,6 +36,9 @@ import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import qol_rerun  # noqa: E402
+
 class CapReached(Exception):
     """Replaced by follow_watch.CapReached once the shared client is loaded."""
 
@@ -88,6 +91,9 @@ DEFAULT_CONFIG = {
                    "coming soon", "ends today", "ends tonight", "ends soon"],
     "max_cost_per_pull": None,
     "timezone": None,
+    # Soft cap of picks per tool or series. 0 turns it off.
+    "max_per_tool": 2,
+    "stale_review_days": 3,
 }
 
 TWEET_FIELDS = "created_at,public_metrics,referenced_tweets,attachments,conversation_id"
@@ -180,9 +186,15 @@ def ref(t, kind):
 
 # ----------------------------------------------------------------------------
 
-def cmd_pull(st, client, days=None):
+def cmd_pull(st, client, days=None, tally_night=False):
     """Reads new posts first, then any gap an earlier capped pull left (with until_id), so
-    'the rest come next pull' is true. A cap stop always says what wasn't read."""
+    'the rest come next pull' is true. A cap stop always says what wasn't read.
+    --tally-night skips ($0) unless it is Sunday or the last pull is 6+ days old."""
+    if tally_night:
+        skip, why = qol_rerun.tally_night_skip(local_now(st.cfg), (st.state() or {}).get("last_pull"))
+        if skip:
+            print(why)
+            return
     cfg = st.cfg
     state = st.state()
     posts = st.posts()
@@ -312,8 +324,20 @@ def cmd_pull(st, client, days=None):
     print(f"Read {read - 1:,} posts in {requests - 1} timeline requests, plus the account check, about ${cost:.2f}.")
     if not_read:
         which = "the crew's daily cap" if crew_cap else "this pull's cost cap"
+        try:
+            cap_shown = float(cfg["max_cost_per_pull"])
+        except (TypeError, ValueError):
+            cap_shown = 0
+        coverage = f"Capped pull: skipped {not_read[0]} (cost cap ${cap_shown:.2f} reached)"
+        print(coverage)
         print(f"{client.who} stopped before {not_read[0]}, cap reached ({which}). Not read this pull: "
               f"{', '.join(not_read)}. They come next pull." + (f" {crew_cap}" if crew_cap else ""))
+        runs_path = os.path.join(st.root, "runs.json")
+        runs = read_json(runs_path, [])
+        if not isinstance(runs, list):
+            runs = []
+        runs.append({"ts": iso(now_utc()), "coverage": coverage, "not_read": not_read})
+        write_json(runs_path, runs[-200:])
     print(f"History on hand: {len(posts):,} posts" + (f", back to {oldest[:10]}." if oldest else ".")
           + (f" Refreshed view counts on {refreshed} posts that just turned a week old."
              if "view-count refresh" not in not_read else
@@ -364,7 +388,7 @@ def cmd_pick(st):
     last_rerun = {}
     for p in posts.values():
         target = p.get("quoted") or p.get("reposted")
-        if target and target in posts:
+        if target and target in posts and qol_rerun.later_local_day(posts[target].get("created"), p.get("created"), cfg.get("timezone")):
             if target not in last_rerun or p["created"] > last_rerun[target]:
                 last_rerun[target] = p["created"]
 
@@ -415,7 +439,7 @@ def cmd_pick(st):
         cands.append({**p, "ratio": ratio, "median": med, "imp": imp, "eng_rate": eng / imp if imp else 0,
                       "last_rerun": lr})
     cands.sort(key=lambda c: (-c["ratio"], -c["eng_rate"]))
-    picks = cands[:cfg["picks"]]
+    picks = qol_rerun.cap_per_tool(cands, cfg["picks"], cfg.get("max_per_tool", 2))
     for c in picks:
         shown[c["id"]] = today.isoformat()
     write_json(st.shown_path, shown, pretty=True)
@@ -523,6 +547,57 @@ def cmd_render(st, path):
         print(f"{missing} picks have no draft yet.")
 
 
+def cmd_media_list(st):
+    """Videos for picks left after rejects. Nothing is downloaded before the build."""
+    picks = _latest_picks(st)
+    rejects = read_json(os.path.join(st.picks_dir, "rejects.json"), [])
+    if isinstance(rejects, dict):
+        rejects = rejects.get("ids") or rejects.get("urls") or []
+    left = qol_rerun.media_list(picks, rejects)
+    out = os.path.join(st.picks_dir, "media_list.json")
+    write_json(out, {"picks": left, "note": "Videos are downloaded and watched only for these picks, and none before the build."})
+    print(f"{len(left)} video picks left after rejects. Nothing downloaded. {out}")
+    for pick in left:
+        print(pick.get("url") or pick.get("post_url"))
+
+
+def cmd_nudge(st):
+    """One line when the review is stale and no rejects are synced. Never builds."""
+    path = _latest_picks_path(st)
+    age = None
+    if path and os.path.exists(path):
+        age = int((datetime.now().timestamp() - os.path.getmtime(path)) // 86400)
+    rejects = read_json(os.path.join(st.picks_dir, "rejects.json"), [])
+    has = bool(rejects) if not isinstance(rejects, dict) else bool(rejects.get("ids") or rejects.get("urls") or rejects.get("synced"))
+    line = qol_rerun.nudge_line(age, has, st.cfg.get("stale_review_days", 3))
+    payload = {"at": iso(now_utc()), "age_days": age, "line": line}
+    write_json(os.path.join(st.picks_dir, "nudge.json"), payload)
+    if line:
+        print(line)
+    else:
+        print("No nudge.")
+
+
+def _latest_picks_path(st):
+    if not os.path.isdir(st.picks_dir):
+        return None
+    names = sorted(n for n in os.listdir(st.picks_dir) if n.startswith("picks_") and n.endswith(".csv"))
+    return os.path.join(st.picks_dir, names[-1]) if names else None
+
+
+def _latest_picks(st):
+    path = _latest_picks_path(st)
+    if not path:
+        return []
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    out = []
+    for row in rows:
+        out.append({"url": row.get("post_url"), "id": (row.get("post_url") or "").rstrip("/").split("/")[-1],
+                    "format": row.get("format") or "", "text": row.get("text") or ""})
+    return out
+
+
 def cmd_status(st):
     s, p = st.state(), st.posts()
     kinds = {}
@@ -538,13 +613,19 @@ def cmd_status(st):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Find your best older media posts for quote-post reruns.")
-    ap.add_argument("command", choices=["pull", "pick", "render", "status"])
+    ap.add_argument("command", choices=["pull", "pick", "render", "status", "media-list", "nudge"])
     ap.add_argument("file", nargs="?")
     ap.add_argument("--days", type=int, help="pull: re-read the last N days in full instead of only new posts")
+    ap.add_argument("--tally-night", action="store_true", help="pull: skip ($0) unless Sunday or the last pull is 6+ days old")
     ap.add_argument("--dir", default=os.environ.get("RR_DIR", BOTS_HOME + "/reruns"))
     a = ap.parse_args(argv)
     st = Store(a.dir)
     if a.command == "pull":
+        if a.tally_night:
+            skip, why = qol_rerun.tally_night_skip(local_now(st.cfg), (st.state() or {}).get("last_pull"))
+            if skip:
+                print(why)
+                return
         fw = load_fw(st.cfg)
         fws = fw.Store(st.cfg["follow_watch_dir"])
         fwc = fws.load_config()
@@ -552,10 +633,14 @@ def main(argv=None):
         global CapReached
         CapReached = fw.CapReached
         try:
-            cmd_pull(st, client, a.days)
+            cmd_pull(st, client, a.days, tally_night=a.tally_night)
         except fw.CapReached as e:  # stopped at the account check: nothing was read or saved
             print(f"{client.who} stopped before {e.label}, cap reached. Nothing was read or saved this pull. {e}")
             sys.exit(3)
+    elif a.command == "media-list":
+        cmd_media_list(st)
+    elif a.command == "nudge":
+        cmd_nudge(st)
     elif a.command == "pick":
         cmd_pick(st)
     elif a.command == "render":

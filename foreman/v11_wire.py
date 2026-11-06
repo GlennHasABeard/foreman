@@ -494,6 +494,8 @@ if __name__ == "__main__":
 # ---------- 7-day totals for Your week and Home ----------
 
 def _when(ts):
+    if isinstance(ts, dict):
+        ts = ts.get("at") or ts.get("ts")
     if isinstance(ts, (int, float)):
         return datetime.fromtimestamp(ts, v11.UTC)
     return _ts(ts)

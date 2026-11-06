@@ -41,6 +41,9 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import qol_leads  # noqa: E402
+
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
@@ -91,8 +94,11 @@ DEFAULT_CONFIG = {
     "leads_min_points": 2,
     "leads_min_followers": None,
     "leads_resurface_days": 21,
+    "leads_expire_days": 30,
     "exclude_terms": None,
     "timezone": None,
+    "thread_rollup": True,
+    "thread_rollup_min_people": 2,
 }
 
 TWEET_FIELDS = "created_at,public_metrics,conversation_id,referenced_tweets,in_reply_to_user_id,author_id,lang,possibly_sensitive"
@@ -259,10 +265,71 @@ def ref(t, kind):
     return None
 
 
+def apply_trial(cfg, trial):
+    """Caps for this pull. A trial uses the trial settings. No promo copy."""
+    if trial:
+        return {"max_cost": cfg.get("trial_max_cost"), "max_liker_posts": cfg.get("trial_max_liker_posts")}
+    return {"max_cost": cfg.get("max_cost_per_run"), "max_liker_posts": cfg.get("max_liker_posts_per_run")}
+
+
+def log_trial(st, what, caps):
+    """Remember that a trial ran and which caps it used. Generic, no owner-specific copy."""
+    path = os.path.join(st.root, "trials.json")
+    trials = read_json(path, [])
+    if not isinstance(trials, list):
+        trials = []
+    trials.append({"at": iso(now_utc()), "what": what, "caps": caps})
+    write_json(path, trials[-50:])
+
+
+def read_own_likes(known, fetched, max_items=400):
+    """Newest-first likes. Stop at the first id already saved. Returns (new_ids, finished)."""
+    known = set(known or [])
+    new = []
+    for post in fetched or []:
+        pid = post["id"] if isinstance(post, dict) else post
+        if pid in known:
+            return new, True
+        new.append(pid)
+        if len(new) >= int(max_items):
+            return new, False
+    return new, True
+
+
+def coverage_block(cut, cap, likes_done):
+    """What this pull read. A cap stop leads with the capped-pull line."""
+    cut = list(cut or [])
+    parts = []
+    line = None
+    if cut:
+        try:
+            shown = float(cap)
+        except (TypeError, ValueError):
+            shown = 0
+        line = f"Capped pull: skipped {cut[0]} (cost cap ${shown:.2f} reached)"
+        parts.append(line)
+        parts.append(f"Not read: {', '.join(cut)}. Counts for those are missing, not zero.")
+    parts.append("Your likes were read." if likes_done else
+                 "Your likes were not finished. Unchecked items may already be liked.")
+    return {"line": line, "text": " ".join(parts), "likes_done": bool(likes_done), "not_read": cut}
+
+
+def mark_already_liked(item, my_likes, likes_unfinished):
+    """Flag a radar item the owner already liked, or that the likes read did not reach."""
+    eid = item.get("id")
+    liked = eid in set(my_likes or [])
+    item["liked"] = liked
+    item["maybe_liked"] = bool(likes_unfinished) and not liked
+    return item
+
+
 def cmd_pull(st, fw, client, trial=False):
     cfg = st.cfg
     started = now_utc()
-    spend = Spend(cfg, cfg["trial_max_cost"] if trial else cfg["max_cost_per_run"])
+    caps = apply_trial(cfg, trial)
+    if trial:
+        log_trial(st, "pull", caps)
+    spend = Spend(cfg, caps["max_cost"])
     state = st.load("state", {})
     posts = st.load("posts", {})
     events = st.load("events", {})
@@ -384,7 +451,9 @@ def cmd_pull(st, fw, client, trial=False):
                 mark("your likes")
             else:
                 likes_done = True
-            new = [t["id"] for t in liked if t["id"] not in set(known)]
+            new, finished_known = read_own_likes(known, liked, cfg["my_likes_max_per_pull"])
+            if not finished_known:
+                likes_done = False
             st.save("my_likes", (new + known)[:5000])
             if new:
                 notes.append(f"Read {len(new)} new likes of yours.")
@@ -405,7 +474,7 @@ def cmd_pull(st, fw, client, trial=False):
             if p["kind"] != "reply" and not p.get("likers_fetched") and p.get("created")
             and lo <= ts(p["created"]) <= hi]
     todo.sort(key=lambda pid: posts[pid]["created"], reverse=True)
-    limit = cfg["trial_max_liker_posts"] if trial else cfg["max_liker_posts_per_run"]
+    limit = caps["max_liker_posts"]
     likes_ok = True
     batch = todo[:limit]
     body = None
@@ -467,14 +536,16 @@ def cmd_pull(st, fw, client, trial=False):
     live = {e["author"] for e in events.values()}
     users = {k: v for k, v in users.items() if k in live}
 
+    block = coverage_block(cut, caps["max_cost"], likes_done)
+    notes.insert(0, block["text"])
     if cut:
         which = "the crew's daily cap" if spend.crew_cap else "this pull's cost cap"
-        first = cut[0]
-        line = (f"Stopped before {first}, cap reached ({which}). Not read or not finished this pull: "
+        line = (f"Stopped before {cut[0]}, cap reached ({which}). Not read or not finished this pull: "
                 f"{', '.join(cut)}. Counts for those are missing, not zero. The next pull picks them up.")
         if spend.crew_cap:
             line += f" {spend.crew_cap}"
-        notes.insert(0, line)
+        notes.insert(1, line)
+        print(f"{client.who}: {block['line']}")
         print(f"{client.who}: {line}")
     state["last_pull"] = iso(started)
     state["last_pull_cut"] = cut
@@ -486,7 +557,7 @@ def cmd_pull(st, fw, client, trial=False):
     runs.append({"ts": iso(started), "trial": trial, "requests": spend.requests, "owned": spend.owned,
                  "quotes": spend.quotes, "likers": spend.likers, "users": spend.users,
                  "cost": round(spend.cost(), 4), "low": round(spend.low(), 4), "high": round(spend.high(), 4), "capped": stopped,
-                 "not_read": cut})
+                 "not_read": cut, "coverage": block["line"], "coverage_text": block["text"]})
     st.save("runs", runs[-200:])
     path = write_pull_report(st, spend, stopped, notes, trial, posts, events, started, cut)
     print(path)
@@ -686,8 +757,9 @@ def cmd_radar(st, fw, fw_store):
         verified = fw.is_verified(u)
         mutual = they and i
         tier = 0 if (verified and mutual) else 1 if verified else 2 if mutual else 3
-        items.append({"id": eid, "e": e, "u": u, "tier": tier, "verified": verified, "mutual": mutual,
-                      "liked": eid in my_likes, "maybe_liked": likes_unfinished and eid not in my_likes})
+        items.append(mark_already_liked(
+            {"id": eid, "e": e, "u": u, "tier": tier, "verified": verified, "mutual": mutual},
+            my_likes, likes_unfinished))
     items.sort(key=lambda x: (x["liked"], x["tier"], -ts(x["e"]["created"]).timestamp()))
     shown = items[:cfg["radar_show"]]
 
@@ -707,45 +779,54 @@ def cmd_radar(st, fw, fw_store):
         L += ["Mentions weren't read in the last pull, so this count is missing mentions. It is not a real 0.", ""]
     if hidden:
         L += ["Hidden: " + ", ".join(f"{n} {why}" for why, n in hidden.items()) + ".", ""]
-    data = []
-    for t in range(4):
-        group = [x for x in shown if x["tier"] == t and not x["liked"]]
-        if not group:
-            continue
-        L += [f"## {names[t]} ({len(group)})", ""]
-        for x in group:
-            L.append(radar_line(x, posts, me, now))
-        L.append("")
-    liked = [x for x in shown if x["liked"]]
-    if liked:
-        L += [f"## You liked these but didn't reply ({len(liked)})", ""] + \
-             [radar_line(x, posts, me, now) for x in liked] + [""]
+    site = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site")
+    if site not in sys.path:
+        sys.path.insert(0, site)
+    import radar_collapse
+    prepared = radar_collapse.prepare_radar(
+        items, prev_run=state.get("last_radar"), now=iso(now),
+        min_people=cfg.get("thread_rollup_min_people", 2),
+        thread_rollup=cfg.get("thread_rollup", True))
+    state["last_radar"] = iso(now)
+    st.save("state", state)
+    L += radar_collapse.md_lines(prepared) + [""]
     if len(items) > len(shown):
         L += [f"{len(items) - len(shown)} more are on the Reply Queue page, with filters for each group.", ""]
-    for x in items:
-        e, u = x["e"], x["u"]
-        chips = [{"t": e["kind"]}, {"t": ago(ts(e["created"]), now)}]
-        if x["verified"]:
+    data = []
+    for row in prepared["rows"]:
+        chips = [{"t": row["kind"]}]
+        if row.get("created"):
+            chips.append({"t": ago(ts(row["created"]), now)})
+        if row.get("question"):
+            chips.append({"t": "question"})
+        if row.get("new"):
+            chips.append({"t": "new"})
+        if row.get("from_account", 0) > 1 and not row.get("low"):
+            chips.append({"t": f"{row['from_account']} from this account"})
+        if row.get("thread"):
+            chips.append({"t": f"{row['thread']['people']} people · {row['thread']['pings']} pings"})
+        if row.get("verified"):
             chips.append({"t": "verified", "a": True})
-        if x["mutual"]:
+        if row.get("mutual"):
             chips.append({"t": "mutual", "a": True})
-        if x["liked"]:
-            chips.append({"t": "you liked it"})
-        elif x.get("maybe_liked"):
-            chips.append({"t": "may already be liked"})
-        links = [{"t": "Open and reply", "u": f"https://x.com/{u.get('username', 'i')}/status/{x['id']}"}]
-        if e.get("target") and e["target"] in posts:
-            links.append({"t": "Your post", "u": f"https://x.com/{me.get('username')}/status/{e['target']}"})
-        data.append({"key": x["id"], "username": u.get("username", "unknown"), "chips": chips,
-                     "text": e.get("text", ""), "links": links,
-                     "g": "You liked these" if x["liked"] else names[x["tier"]]})
+        who = row.get("username") or "i"
+        links = [{"t": "Open and reply", "u": f"https://x.com/{who}/status/{row['id']}"}] if row.get("id") and not row.get("low") else []
+        data.append({"key": row["id"], "username": who if not row.get("low") else "", "chips": chips,
+                     "text": row.get("text") or "", "links": links,
+                     "g": "Low value" if row.get("low") else names[min(row.get("tier", 3), 3)],
+                     "question": bool(row.get("question")), "new": bool(row.get("new")),
+                     "more": row.get("more") or 0, "fold": row.get("fold") or [],
+                     "low": bool(row.get("low")), "thread": row.get("thread") or ""})
     path = os.path.join(st.reports, f"radar_{lt.strftime('%Y-%m-%d_%H%M')}.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
+    runs = st.load("runs", [])
+    cov = (runs[-1].get("coverage") if runs and isinstance(runs[-1], dict) else None) or ""
     write_page(os.path.join(st.reports, "mention_radar.html"), "Reply Queue",
-               (f"{warn} " if warn else "") +
-               f"{len(items)} unanswered from the last {cfg['radar_hours']} hours, {lt.strftime('%b %d, %I:%M %p')}. "
-               "Verified mutuals first, newest first within each group.", "radar-done", data)
+               ((cov + " ") if cov else "") + (f"{warn} " if warn else "") +
+               f"{prepared['new_count']} new. {len(prepared['rows'])} accounts from {len(items)} items, "
+               f"last {cfg['radar_hours']} hours, {lt.strftime('%b %d, %I:%M %p')}. "
+               "Questions first, then newest.", "radar-done", data)
     if warn:
         print(warn)
     print(path)
@@ -836,6 +917,9 @@ def cmd_leads(st, fw, fw_store):
     for x in top:
         shown[x["id"]] = {"username": x["u"].get("username"), "date": today.isoformat(), "points": x["a"]["points"]}
     st.save("shown_leads", shown)
+    seen_path = os.path.join(st.root, "leads_seen.json")
+    seen = qol_leads.track_leads_seen(read_json(seen_path, {}), leads, today)
+    write_json(seen_path, seen)
 
     L = [f"# Fan Finder, {lt.strftime('%a %b %d, %Y')}", "",
          f"Verified accounts that engaged with your posts in the last {cfg['leads_days']} days and don't follow you. "
@@ -844,8 +928,10 @@ def cmd_leads(st, fw, fw_store):
     if warn:
         L += [f"> {warn}", ""]
     if cfg["max_liker_posts_per_run"] == 0:
-        L += ["> Likes are turned off (max_liker_posts_per_run is 0), so this list counts replies, "
-              "mentions and quotes.", ""]
+        like_cut = now - timedelta(days=cfg.get("leads_days", 14))
+        stored_likes = sum(1 for e in events.values()
+                           if e.get("kind") == "like" and e.get("created") and ts(e["created"]) >= like_cut)
+        L += ["> " + qol_leads.likes_off_line(stored_likes, cfg.get("leads_days", 14)), ""]
     elif not any(e["kind"] == "like" for e in events.values()):
         L += ["> No likes in the data yet, so this list only counts replies, mentions and quotes.", ""]
     L += [f"## Leads ({len(top)})", "", "| Account | Followers | Likes | Replies | Quotes | Their posts |",
@@ -867,6 +953,25 @@ def cmd_leads(st, fw, fw_store):
                      "links": [{"t": f"Their {events[eid]['kind']}", "u": f"https://x.com/{who}/status/{eid}"}
                                for eid in a["links"]]})
     L.append("")
+    hist_path = os.path.join(st.root, "leads_backlog.json")
+    history = read_json(hist_path, {"by_week": {}, "people": {}})
+    expire_days = int(cfg.get("leads_expire_days", 30))
+    still = {x["id"] for x in leads}
+    people, expired = qol_leads.expire_backlog(history.get("people") or {}, today, expire_days, still)
+    if expired:
+        dropped["older than the expire window"] = dropped.get("older than the expire window", 0) + expired
+    for tid in {t["id"] for t in top}:
+        people.pop(tid, None)
+    for x in leads:
+        if x["id"] not in {t["id"] for t in top}:
+            people[x["id"]] = {"username": x["u"].get("username"), "last": today.isoformat()}
+    prev = qol_leads.previous_week_count(history, today)
+    backlog_n = len(people)
+    history["people"] = people
+    history.setdefault("by_week", {})[today.isoformat()] = backlog_n
+    write_json(hist_path, history)
+    backlog_line = qol_leads.backlog_copy(backlog_n, prev)
+    L += [backlog_line, ""]
     if len(leads) > len(top):
         L += [f"{len(leads) - len(top)} more qualified. They show up on later runs.", ""]
     if dropped:
@@ -878,9 +983,8 @@ def cmd_leads(st, fw, fw_store):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
     write_page(os.path.join(st.reports, "warm_leads.html"), "Fan Finder",
-               (f"{warn} " if warn else "") +
-               f"{len(top)} verified accounts that engage with your posts but don't follow you, "
-               f"{lt.strftime('%b %d')}.", "leads-done-" + today.isoformat(), data)
+               (f"{warn} " if warn else "") + backlog_line + " " +
+               f"{len(top)} shown, {lt.strftime('%b %d')}.", "leads-done-" + today.isoformat(), data)
     if warn:
         print(warn)
     print(path)
@@ -910,7 +1014,11 @@ def cap_warning(st):
         return f"{st.pull_blocked} This list is from the last pull that ran ({lp}), not a new one."
     cut = st.load("state", {}).get("last_pull_cut") or []
     if cut:
-        return (f"The last pull stopped before {cut[0]}, cap reached. Not read: {', '.join(cut)}. "
+        runs = st.load("runs", [])
+        cov = ""
+        if runs and isinstance(runs[-1], dict) and runs[-1].get("coverage"):
+            cov = runs[-1]["coverage"] + " "
+        return (cov + f"The last pull stopped before {cut[0]}, cap reached. Not read: {', '.join(cut)}. "
                 "This list may be missing items, so a low count here is not a real count.")
     return None
 

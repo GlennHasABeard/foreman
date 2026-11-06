@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-05",
+  "built": "2026-11-05T15:00:00+00:00",
+  "x_calls": 0,
+  "pack": [
+    {
+      "h": "wash00_demo",
+      "name": "Demo painter 0",
+      "followers": 800,
+      "rarity": "Legendary",
+      "why": "Hidden gem: in your niche, you don't follow them, and nobody you follow is tagged in their bio",
+      "checked": true,
+      "post": {
+        "id": "1800000000000000000",
+        "text": "A river study in two washes. Demo data.",
+        "likes": 900,
+        "created": "2026-11-01"
+      }
+    },
+    {
+      "h": "wash01_demo",
+      "name": "Demo painter 1",
+      "followers": 1500,
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers",
+      "checked": true,
+      "post": {
+        "id": "1800000000000000001",
+        "text": "A river study in two washes. Demo data.",
+        "likes": 80,
+        "created": "2026-11-01"
+      }
+    },
+    {
+      "h": "wash02_demo",
+      "name": "Demo painter 2",
+      "followers": 1500,
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers",
+      "checked": true,
+      "post": {
+        "id": "1800000000000000002",
+        "text": "A river study in two washes. Demo data.",
+        "likes": 80,
+        "created": "2026-11-01"
+      }
+    },
+    {
+      "h": "wash03_demo",
+      "name": "Demo painter 3",
+      "followers": 1500,
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers",
+      "checked": true,
+      "post": {
+        "id": "1800000000000000003",
+        "text": "A river study in two washes. Demo data.",
+        "likes": 80,
+        "created": "2026-11-01"
+      }
+    },
+    {
+      "h": "wash04_demo",
+      "name": "Demo painter 4",
+      "followers": 1500,
+      "rarity": "Rare",
+      "why": "Top 18% of Follow Finder's picks for engagement. Best post got 80 likes on 1,500 followers",
+      "checked": true,
+      "post": {
+        "id": "1800000000000000004",
+        "text": "A river study in two washes. Demo data.",
+        "likes": 80,
+        "created": "2026-11-01"
+      }
+    }
+  ],
+  "spares": [],
+  "deck": [],
+  "rules": [],
+  "chips": [],
+  "score": {
+    "streak": 1,
+    "level": 1,
+    "week": 2,
+    "next_level": 10,
+    "follows_today": 0,
+    "follow_cap": 5
+  },
+  "note": "Sample only. The Game tab stays off until creator-scout/game/LIVE exists."
+}

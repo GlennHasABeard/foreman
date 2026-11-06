@@ -1,14 +1,16 @@
 # Fan Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.1.2 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
-Copy `follow-audit/follow_watch.py`, `x_prices.py` and `bot_spend.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` into `$BOTS_HOME/engagement` (the same script Reply Queue uses). Scripts only, never a sign-in or token file.
+Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` plus `qol_leads.py` into `$BOTS_HOME/engagement` (the same scripts Reply Queue uses). Scripts only, never a sign-in or token file.
 
 ## Questions
 Ask only these and save them in `$BOTS_HOME/engagement/config.json`: `leads_verified_only`, `leads_min_followers`. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Fan Finder notes
+The page and report say "N people still engaging who don't follow you yet (±D vs last week)". Leads with no engagement for `leads_expire_days` (default 30) drop out of the backlog and the count shows in Left out. When new like pulls are off, stored likes from the last 14 days still count.
+
 If Reply Queue is installed, Fan Finder reuses its pull for $0. If not, it makes its own pull. Tell the owner first that this costs about the same as one Reply Queue run (about $0.25 to $1.07 depending on how busy their posts are) and that it only pulls again when the last pull is older than 12 hours.
 
 ## Cap and ledger

@@ -296,9 +296,18 @@ def new_rule(reason, handle=None, free=None):
 def week_start():
     d = now().date(); return (d - dt.timedelta(days=d.weekday())).isoformat()
 
+EMBED_CAVEAT = (
+    "The Daily Pack uses X's free embed widget (platform.twitter.com/widgets.js). "
+    "Blind cards and vision sheets also read the free embed data at cdn.syndication.twimg.com. "
+    "That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. "
+    "If it breaks, cards fall back to the saved post text and unrated picks stay blurred. "
+    "Media expansions stay off. Nothing here calls a paid X or vision API."
+)
+
+
 def blind_media(deck):
-    """Template rule: blind cards use X's official embed widget only, under a solid cover over the name
-    row and footer with taps blocked until reveal. No unofficial endpoints, no network here, $0."""
+    """Blind cards use the official embed widget under a solid cover. The page may also read the
+    unofficial syndication embed. No network here, $0. See EMBED_CAVEAT."""
     for x in deck:
         x["bmedia"] = []
         x["bdate"] = (x.get("created") or "")[:10]

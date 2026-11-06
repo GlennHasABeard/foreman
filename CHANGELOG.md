@@ -2,6 +2,64 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
+## v1.2.0 (2026-11-05)
+
+Install pins point at v1.2.0.
+
+### All individual templates
+- Pack version in `foreman/standalone.json` is v1.2.0.
+- A capped pull adds one line: "Capped pull: skipped … (cost cap $X reached)".
+- Home has a Due today list from `schedule.json`, separate from bot health.
+- Owned-read display estimates can scale by the last 7 days' billed/logged ratio (capped 0.3 to 1.5) and keep `est_cost_raw`. Spend caps stay on the unscaled rates.
+
+### Follow Audit
+- The daily newest-followers read is skipped when the estimate is 5 lost or fewer (`daily_newest_threshold`). `--force` overrides. The report shows the threshold and a 7-night replay. The monthly full scan is unchanged.
+- The new-follower headline matches the named rows, with extras labelled "(+N in Followed you back, +M seen but not listed)".
+- Sunday rollup of named unfollows from saved data (`weekly_rollup`, weekday 6).
+
+### Follow Finder
+- Game tab stays off until `creator-scout/game/LIVE` exists. Blind cards and vision sheets may read `cdn.syndication.twimg.com` (unofficial, $0, may break, saved text remains, media expansions stay off).
+- Language mix (`lang_balance`) is a floor, not a cap, applied before the size cut. `lang_balance_slack` still loads and is unused.
+- Follower `size_bands` are floors after the language floor and never push a language under its floor.
+- Like floor applies to the shown best post.
+- Off-topic word-boundary filters, plus optional `offtopic_terms`.
+- After 3 sensitive-media fails, an account rests 30 days and is skipped before any paid lookup.
+
+### Shoutout Picker
+- Flagged mutuals: likely fake, spam signals and never posted are left out and named. watch, inactive and dormant rank last.
+- Rollover lookup ships **off**. One batched users/by is about $0.01 per rollover.
+- Fresh rollovers keep last week's verdict with no new post pull.
+- Every pick shows week N. Week 1 adds "· new" or "· runner-up promoted".
+- One extra band of 20 when keeps are short. No second band.
+- `catch-up` updates the log from saved posts only.
+
+### Reply Queue
+- One row per account, questions first, with a fold and a 24-hour browser mute.
+- Question chip and filter. Emoji, gm/gn and link-only replies fold into one row.
+- New chip for rows newer than the previous run when that run is at least 30 minutes old.
+- Multi-person threads roll up by root.
+- New Done ticks are `{done: 1, at: ISO}`. Unticking deletes the mark. Median time to reply is filled at publish from reply matches plus Done marks that have a time.
+
+### Fan Finder
+- "N people still engaging who don't follow you yet (±D vs last week)".
+- `leads_expire_days` (default 30) drops stale backlog leads. The count is in Left out.
+- When new like pulls are off, stored likes from the last 14 days still count.
+
+### Rerun Picker
+- `pull --tally-night` skips ($0) unless it is Sunday or the last pull is 6+ days old.
+- Same-day self-quotes do not start the cooldown.
+- Soft cap of 2 picks per tool or series (`max_per_tool`, 0 turns it off).
+- `media-list` lists videos left after rejects and downloads nothing before the build.
+- `nudge` writes one line for a stale review with no rejects. It never builds.
+
+### Analytics Log
+- `seal` replaces `finish`. The manifest key `finished` is unchanged. There is no alias.
+- Tracker rows upsert by date.
+- Replies scorecard ships **off** (`replies_scorecard.enabled` false).
+
+### Not in this pack
+- Private owner bots and configs listed in the box-only private exclude list stay on the live bots and are not in this pack.
+
 ## v1.1.2 (2026-10-31)
 Published 2026-10-31. Each template's release notes list only its own section plus "All individual templates".
 

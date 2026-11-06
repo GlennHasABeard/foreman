@@ -40,6 +40,9 @@ import re
 import sys
 from datetime import date, datetime
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import qol_desk  # noqa: E402
+
 # Where the bots live. Foreman sets BOTS_HOME for each bot. On Grok Bot that is /workspace.
 BOTS_HOME = os.environ.get("BOTS_HOME", "/workspace").rstrip("/")
 
@@ -56,6 +59,13 @@ DEFAULT_CONFIG = {
     "account_kinds": "",
     # optional labels to sort the list into, in this order. Empty means one plain list.
     "labels": [],
+    # Leave out likely-fake, spam and never-posted mutuals. Rank watch, inactive and dormant last.
+    "flagged_filter": True,
+    # Off until you turn it on. One batched users/by, about $0.01 per rollover.
+    "rollover_lookup": False,
+    "keep_fresh_rollovers": True,
+    "keep_fresh_days": 14,
+    "thin_pool_extra": 20,
 }
 
 LOG_FIELDS = ["date", "handle", "id", "post_url", "added"]
@@ -280,6 +290,20 @@ def cmd_candidates(desk):
     fresh.sort(key=lambda x: x[0], reverse=True)
     iso = today.isocalendar()
     ordered = fresh + spread_by_size(old, f"{iso[0]}-{iso[1]}")
+    left_out = []
+    if cfg.get("flagged_filter", True):
+        flags = qol_desk.load_flags(cfg.get("follow_watch_dir"))
+        ordered, left_out = qol_desk.split_flagged(ordered, flags, lambda item: item[2])
+        kept_rows, left_rows = [], []
+        for row in rows:
+            decision = qol_desk.flag_decision(flags.get(norm(row["handle"])))
+            if decision == "out":
+                left_rows.append(row["handle"])
+            else:
+                kept_rows.append(row)
+        rows = kept_rows
+        if left_rows:
+            left_out = left_out + [(norm(h), sorted(flags.get(norm(h)) or [])) for h in left_rows]
     room = max(0, cfg["review_pool"] - len(rows))
     for newest, fol, name, i in ordered[:room]:
         rows.append({"handle": name, "source": "new mutual" if newest > baseline else "new",
@@ -307,6 +331,10 @@ def cmd_candidates(desk):
               f"followers (--limit {lf.get('limit')}), so this list covers only those mutuals, not all of them.")
     if dropped_mutual:
         print("No longer mutual, taken off the list: " + ", ".join("@" + h for h in dropped_mutual))
+    if left_out:
+        named = ", ".join("@" + h + " (" + ", ".join(tags) + ")" for h, tags in left_out)
+        print("Left out, flagged: " + named + ". likely fake, spam signals and never posted stay out. "
+              "watch, inactive and dormant are ranked last.")
 
 
 def cmd_week(desk, review_path):
@@ -323,6 +351,13 @@ def cmd_week(desk, review_path):
 
     with open(review_path, newline="", encoding="utf-8") as f:
         reviews = list(csv.DictReader(f))
+
+    statuses = {}
+    if qol_desk.rollover_lookup_on(cfg):
+        print(qol_desk.rollover_cost_line(True))
+        statuses = _rollover_statuses(desk, [r.get("handle") for r in reviews if (r.get("source") or "") == "rollover"])
+    else:
+        statuses = {}
 
     picked_last_week = [q for q in old_queue
                         if q["id"] in shout_ids or norm(q["username"]) in shout_handles]
@@ -343,7 +378,19 @@ def cmd_week(desk, review_path):
         if fol_now is None:
             fol_now = ((a.get("user") or {}).get("public_metrics") or {}).get("followers_count")
         reason = None
-        if h in shout_handles or (i and i in shout_ids):
+        status = statuses.get(h)
+        source = (r.get("source") or "").strip()
+        last_post = (r.get("last_post_date") or "").strip() or (old_by_id.get(i) or {}).get("last_post") or ""
+        fresh_keep = (cfg.get("keep_fresh_rollovers", True) and source == "rollover" and not verdict
+                      and (a.get("follower_now"))
+                      and qol_desk.fresh_post(last_post, today, cfg.get("keep_fresh_days", 14)))
+        if fresh_keep:
+            verdict = "keep"
+            if not note:
+                note = "kept, posted within 14 days, no new post pull"
+        if status and qol_desk.is_gone(status):
+            reason = status
+        elif h in shout_handles or (i and i in shout_ids):
             reason = "already had a shoutout"
         elif h in removed_handles:
             reason = "removed"
@@ -354,7 +401,6 @@ def cmd_week(desk, review_path):
         elif fol_now is not None and not (cfg["min_followers"] <= fol_now <= cfg["max_followers"]):
             reason = f"now has {fol_now:,} followers"
             skips[h] = today.isoformat()
-        source = (r.get("source") or "").strip()
         if reason:
             dropped.append((r.get("handle"), reason, source))
             continue
@@ -362,7 +408,7 @@ def cmd_week(desk, review_path):
         item = {"id": i or "h:" + h, "username": r.get("handle").lstrip("@"),
                 "followers": fol_now, "label": clean_label(r.get("label") or r.get("art_type") or "", cfg),
                 "sample_post": (r.get("sample_post_url") or "").strip(),
-                "last_post": (r.get("last_post_date") or "").strip(), "note": note}
+                "last_post": last_post, "note": note}
         prev = old_by_id.get(item["id"])
         if prev:
             item["added"] = prev["added"]
@@ -382,6 +428,13 @@ def cmd_week(desk, review_path):
     runners.sort(key=lambda x: x.get("benched", ""))
     ordered = roll + runners + new
     week = ordered[:cfg["list_size"]]
+    already_extra = any((r.get("source") or "").strip().lower() == "extra band" for r in reviews)
+    if qol_desk.needs_extra_band(len(week), cfg["list_size"], already_extra):
+        added = _write_extra_band(desk, reviews, cfg, accounts, state)
+        print(f"Keeps are {len(week)} of {cfg['list_size']}. Added {added} new mutuals "
+              f"(source extra band, one band of {cfg.get('thin_pool_extra', 20)}) to the review CSV "
+              "and stopped without saving.")
+        return
     labels = [l.lower() for l in cfg.get("labels") or []]
     if labels:  # sort into the owner's labels, in their order, unlabeled last
         week.sort(key=lambda x: labels.index((x.get("label") or "").lower()) if (x.get("label") or "").lower() in labels else len(labels))
@@ -403,12 +456,8 @@ def cmd_week(desk, review_path):
           ("| # | Account | Followers | Label | Sample | Note |" if labels else "| # | Account | Followers | Sample | Note |"),
           "|---|---|---|---|---|---|" if labels else "|---|---|---|---|---|"]
     for n, it in enumerate(week, 1):
-        if it["weeks_listed"] > 1:
-            tag = f"week {it['weeks_listed']} on the list"
-        elif it.get("benched"):
-            tag = "runner-up from last week"
-        else:
-            tag = "new"
+        tag = qol_desk.week_label(it.get("weeks_listed") or 1, bool(it.get("benched")) and (it.get("weeks_listed") or 1) <= 1)
+        it["week_label"] = tag
         if it["note"]:
             tag += f". {it['note']}"
         sample = f"[post]({it['sample_post']})" if it["sample_post"] else ""
@@ -470,7 +519,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 function render(){document.getElementById("list").innerHTML=DATA.map((c,i)=>`
 <div class="card${done[c.username]?" done":""}"><div class="n">${i+1}</div><div>
 <a class="h" href="https://x.com/${encodeURIComponent(c.username)}" target="_blank" rel="noopener">@${esc(c.username)}</a>
-<div class="chips">${c.followers!=null?'<span class="c">'+Number(c.followers).toLocaleString()+' followers</span>':""}${c.label?'<span class="c">'+esc(c.label)+'</span>':""}${c.weeks_listed>1?'<span class="c a">week '+c.weeks_listed+'</span>':'<span class="c">new</span>'}</div>
+<div class="chips">${c.followers!=null?'<span class="c">'+Number(c.followers).toLocaleString()+' followers</span>':""}${c.label?'<span class="c">'+esc(c.label)+'</span>':""}<span class="c a">${esc(c.week_label||("week "+(c.weeks_listed||1)))}</span></div>
 ${c.sample_post?'<a class="s" href="'+esc(c.sample_post)+'" target="_blank" rel="noopener">Sample post</a>':""}${c.note?'<div class="note">'+esc(c.note)+'</div>':""}</div>
 <label class="chk"><input type="checkbox" data-u="${esc(c.username)}" ${done[c.username]?"checked":""}>done</label></div>`).join("")}
 document.getElementById("list").addEventListener("change",e=>{const u=e.target.dataset.u;if(!u)return;if(e.target.checked)done[u]=1;else delete done[u];save();render()});render();
@@ -502,8 +551,12 @@ def clean_label(raw, cfg):
 def write_html(desk, week, today):
     sub = (f"Week of {today.strftime('%b %d, %Y')}. Mutuals in your follower range who haven't had a shoutout. "
            "Unpicked names roll over to next week. " + check_note())
-    data = [{k: it.get(k) for k in ("username", "followers", "label", "sample_post", "weeks_listed", "note")}
-            for it in week]
+    data = []
+    for it in week:
+        row = {k: it.get(k) for k in ("username", "followers", "label", "sample_post", "weeks_listed", "note")}
+        row["week_label"] = it.get("week_label") or qol_desk.week_label(
+            it.get("weeks_listed") or 1, bool(it.get("benched")) and (it.get("weeks_listed") or 1) <= 1)
+        data.append(row)
     page = (HTML_PAGE.replace("__SUB__", html.escape(sub)).replace("__WEEK__", today.isoformat())
             .replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/")))
     with open(os.path.join(desk.weeks_dir, "shoutout_list.html"), "w", encoding="utf-8") as f:
@@ -546,6 +599,102 @@ def cmd_remove(desk, handles, restore=False):
     print(f"{verb}: " + ", ".join("@" + norm(h) for h in handles) + f". List now has {len(queue)} names.")
 
 
+def _rollover_statuses(desk, handles):
+    """One batched users/by. About $0.01 per rollover. Failures keep every account."""
+    names = []
+    for handle in handles:
+        h = norm(handle)
+        if h and h not in names:
+            names.append(h)
+    if not names:
+        return {}
+    try:
+        sys.path.insert(0, desk.cfg["follow_watch_dir"])
+        import follow_watch as fw
+        store = fw.Store(desk.cfg["follow_watch_dir"])
+        fwc = store.load_config()
+        client = fw.XClient(store, fwc, fw.Meter({**fwc, "max_resources_per_run": 10 ** 9}))
+        body = {"data": [], "errors": []}
+        for i in range(0, len(names), 100):
+            chunk = names[i:i + 100]
+            part = client.get("/users/by", {"usernames": ",".join(chunk), "user.fields": "id,username"})
+            body["data"] += part.get("data") or []
+            body["errors"] += part.get("errors") or []
+        return qol_desk.classify_users_by(body, names)
+    except Exception as e:
+        print(f"Rollover lookup skipped: {e}. Accounts stay in the review.")
+        return {}
+
+
+def _write_extra_band(desk, reviews, cfg, accounts, state):
+    """Append one band of new mutuals to the review CSV. Does not save the week."""
+    have = {norm(r.get("handle")) for r in reviews}
+    baseline = state.get("baseline_date", "")
+    band = []
+    for i, a in accounts.items():
+        if not (a.get("follower_now") and a.get("following_now")):
+            continue
+        u = a.get("user") or {}
+        name = u.get("username") or ""
+        if not name or norm(name) in have:
+            continue
+        newest = max(a.get("follower_since") or "", a.get("following_since") or "")
+        if baseline and newest <= baseline:
+            continue
+        fol = (u.get("public_metrics") or {}).get("followers_count", 0) or 0
+        if not (cfg["min_followers"] <= fol <= cfg["max_followers"]):
+            continue
+        band.append((newest, name, fol))
+    band.sort(reverse=True)
+    band = band[:int(cfg.get("thin_pool_extra", 20))]
+    path = os.path.join(desk.review_dir, "to_review.csv")
+    new_file = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if new_file:
+            w.writerow(["handle", "source", "followers_at_last_scan", "weeks_listed",
+                        "verdict", "label", "sample_post_url", "followers_now", "last_post_date", "note"])
+        for _newest, name, fol in band:
+            w.writerow([name, "extra band", fol, 0, "", "", "", "", "", ""])
+    return len(band)
+
+
+def _saved_posts(desk):
+    """Posts already on disk. No X calls."""
+    found = []
+    paths = [
+        os.path.join(desk.root, "saved_posts.json"),
+        os.path.join(BOTS_HOME, "reruns", "posts.json"),
+        os.path.join(BOTS_HOME, "engagement", "posts.json"),
+    ]
+    for path in paths:
+        raw = read_json(path, None)
+        if isinstance(raw, list):
+            found.extend(raw)
+        elif isinstance(raw, dict):
+            for pid, post in raw.items():
+                if isinstance(post, dict):
+                    found.append(dict(post, id=post.get("id") or pid))
+    return found
+
+
+def cmd_catch_up(desk, dry_run=False):
+    """Update the shoutout log from saved posts only."""
+    posts = _saved_posts(desk)
+    added = qol_desk.catch_up_plan(desk.log(), posts, today_local(desk.cfg))
+    if dry_run:
+        print(f"Dry run. {len(added)} shoutouts would be added from saved posts. No X calls.")
+        for row in added:
+            print(f"  @{row['handle']} {row['post_url']}")
+        return
+    if not added:
+        print(f"Catch-up: no new shoutouts in saved posts. Log stays at {len(desk.log())}. No X calls.")
+        return
+    rows = desk.log() + added
+    desk.save_log(rows)
+    print(f"Catch-up added {len(added)} from saved posts. The log now holds {len(rows)}. No X calls.")
+
+
 def cmd_status(desk):
     log = desk.log()
     q = desk.queue()
@@ -556,12 +705,14 @@ def cmd_status(desk):
     print(f"Current list ({len(q)}): " + ", ".join("@" + x["username"] for x in q))
     b = desk.bench()
     print(f"Runners-up ({len(b)}): " + ", ".join("@" + x["username"] for x in b))
+    print(qol_desk.rollover_cost_line(qol_desk.rollover_lookup_on(desk.cfg)))
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Shoutout log and weekly candidate list.")
-    ap.add_argument("command", choices=["log-add", "seed-skips", "candidates", "week", "remove", "restore", "status"])
+    ap.add_argument("command", choices=["log-add", "seed-skips", "candidates", "week", "remove", "restore", "status", "catch-up"])
     ap.add_argument("args", nargs="*")
+    ap.add_argument("--dry-run", action="store_true", help="catch-up: show what saved posts would add, write nothing")
     ap.add_argument("--dir", default=os.environ.get("SD_DIR", BOTS_HOME + "/shoutouts"))
     a = ap.parse_args(argv)
     desk = Desk(a.dir)
@@ -577,6 +728,8 @@ def main(argv=None):
         cmd_candidates(desk)
     elif a.command == "week":
         cmd_week(desk, a.args[0] if a.args else os.path.join(desk.review_dir, "to_review.csv"))
+    elif a.command == "catch-up":
+        cmd_catch_up(desk, dry_run=a.dry_run)
     elif a.command in ("remove", "restore"):
         if not a.args:
             raise SystemExit(f"{a.command} needs at least one handle")

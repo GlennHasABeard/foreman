@@ -22,3 +22,15 @@ so the Reply Queue median is 42 min. See median.json.
 Publish that page from this fixture, still with no Game LIVE flag:
 
     BOTS_HOME=demo/juniper/bots SITE_DIR=demo/juniper/published LISTS_DEMO=1 python3 site/publish_lists.py --dry-run
+
+Dependencies: Python 3 standard library only. No pip packages and no network.
+Run from the pack root. The command rewrites demo/juniper/html/ and
+demo/juniper/html/scenarios/. It also writes gitignored local files
+demo/juniper/bots/engagement/config.json and data/. Those two are not part of the pack.
+
+Pages: index.html is Home. There is no dispatch.html.
+Dispatch health is the first card on week.html, titled Dispatch.
+Your week is week.html. The seven bot pages sit next to Home.
+scenarios/analytics-nonmonetized/analytics-log.html hides the 500K chart.
+scenarios/solo/<slug>/ is that bot alone, with a week page that lists only that bot.
+The Analytics Log solo page is the nonmonetized one.

@@ -23,6 +23,10 @@ Finds creators in the owner's niche worth following.
 
 If this bot was set up from its individual template (even if a Foreman crew is also here), `CREW_BOT="Follow Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/creator-scout/config.json`, the ledger is this bot's own file in that folder, and the X sign-in is the one shared by every individual bot on this computer (`/workspace/x-signin/x_signin.json`, or a Foreman crew's `dispatch/x_signin.json` if there is one). If it ever needs redoing, this bot redoes it (see `guides/follow-finder.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
 
+## Language floor (off until the owner names languages)
+
+`lang_balance` ships empty, so no language is favored and nothing is copied from another account. At setup ask, in these words: "Which languages should the shortlist favor, and what minimum share should each one get? Leave this blank to keep the language floor off." Save only the owner's answer, for example one language code they typed and a share such as 0.3. An empty answer stays `{}`. Never choose a language for them.
+
 ## What you do
 
 Script: `$BOTS_HOME/creator-scout/creator_scout.py`.
@@ -37,7 +41,7 @@ Script: `$BOTS_HOME/creator-scout/creator_scout.py`.
 
 A daily game on the Follow Finder page that turns the shortlist into a pack to open. The build makes no X API calls (it prints "X calls: 0"). Only the optional image check spends, and only after showing its cost. It is off until the owner says "turn on Game", which creates `$BOTS_HOME/creator-scout/game/LIVE`. Saying "turn off Game" deletes that file and the next publish removes game.json.
 
-**Embeds and images:** the Game stays off until the owner says "turn on Game". The Daily Pack uses X's free embed widget (`platform.twitter.com/widgets.js`). Blind cards and vision sheets also read the free embed data at `cdn.syndication.twimg.com`. That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall back to the saved post text and unrated picks stay blurred. Media expansions stay off. The optional image check (`game_image_check` in config.json, **off by default**) builds contact sheets from that free embed. `daily_vision.py cost` prints the line first, and `prep` reads nothing without `--yes`.
+**Embeds and images:** the Game stays off until the owner says "turn on Game". The Daily Pack uses only X's official embed widget (`platform.twitter.com/widgets.js`). If an embed does not load, the card shows the saved post text. Unrated picks stay blurred. The optional image check (`game_image_check` in config.json, **off by default**) reads each unrated pick once through official media expansions, shows its cost first, and `prep` reads nothing without `--yes`.
 
 Daily order (after the normal run):
 1. Only if the owner turned on the image check: `python3 $BOTS_HOME/creator-scout/game/nsfw/daily_vision.py cost`, tell the owner the cost line, then `daily_vision.py prep --yes`, look at each `nsfw/sheets/daily_*.jpg` yourself and rate every pending handle: `python3 daily_vision.py rate HANDLE safe|suggestive|explicit|unchecked "note"`. Suggestive or explicit adds the handle to never_show. Then `python3 daily_vision.py apply`.

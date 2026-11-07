@@ -115,8 +115,15 @@ def cap_per_tool(ranked, limit, max_per=2):
 
 
 def media_list(picks, rejects):
-    """Video picks left after rejects. Nothing is downloaded here."""
-    rejected = {str(r) for r in (rejects or [])}
+    """Video picks left after rejects. Nothing until a reject list exists.
+
+    None or an empty list means rejects are not there yet, so this returns nothing.
+    A non-empty list is the reject record. Videos named in it are left out.
+    Nothing is downloaded here.
+    """
+    if not rejects:
+        return []
+    rejected = {str(r) for r in rejects}
     out = []
     for pick in picks or []:
         url = str(pick.get("url") or pick.get("post_url") or "")

@@ -5,9 +5,8 @@ blurred behind "Tap to show" in the Game. Follow Finder's hard NSFW text filter 
 flag still run on every pick.
 
 Turn it on by setting "game_image_check": true in Follow Finder's config.json (or say "turn on image check").
-Sheets are built from the free embed data at cdn.syndication.twimg.com. That path is unofficial and
-undocumented. It costs $0, but X can change or block it without notice. If a pick fails, it stays blurred.
-Media expansions stay off. Nothing here calls a paid X or vision API. `prep` still waits for --yes.
+It then reads each unrated pick's best post once with X media expansions, an official X API read,
+priced from the crew price table. The cost is printed first, and prep reads nothing without --yes.
 
 Usage:
   python3 daily_vision.py cost          -> how many picks are unrated and what the check would cost
@@ -39,22 +38,12 @@ def rates():
     return x_prices.RATES
 
 
-SYND = "https://cdn.syndication.twimg.com/tweet-result?id={id}&lang=en&token=a"
-
-
-def synd_tweet(tid):
-    """Free unofficial embed. None if X blocks it. Never a paid media expansion."""
-    try:
-        req = urllib.request.Request(SYND.format(id=tid), headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except Exception:
-        return None
-
-
 def cost_line(n):
-    return n, 0.0, (f"Image check: {n} unrated picks via the free unofficial embed "
-                    "(cdn.syndication.twimg.com), $0. If it fails, those picks stay blurred. Media expansions stay off.")
+    R = rates()
+    each = R["post"] + R["attached_user"]
+    return n, each, (f"Image check: {n} unrated picks x ${each:.3f} "
+                     "(one official post read with media expansions plus its attached profile) "
+                     f"= ${n * each:.2f}")
 
 
 def get(url, path):
@@ -74,24 +63,29 @@ def prep(yes):
     pend = pending(); n, each, line = cost_line(len(pend)); print(line)
     if not pend: return
     if not yes:
-        print("Not read. Run again with --yes. This path is $0 and unofficial."); return
-    S = g.rj(SJ, {}); ids = {g.best_post(x)["id"]: x["username"].lower() for x in pend}
-    for tid, h in ids.items():
-        body = synd_tweet(tid)
-        if not body:
-            continue
-        photos = []
-        for photo in body.get("photos") or []:
-            url = photo.get("url") if isinstance(photo, dict) else None
-            if url:
-                photos.append(url)
-        video = body.get("video") or {}
-        poster = video.get("poster") or video.get("poster_url") if isinstance(video, dict) else None
-        if poster:
-            photos.append(poster)
-        user = body.get("user") or {}
-        avatar = user.get("profile_image_url_https") or user.get("profile_image_url") or ""
-        S[h] = dict(post=tid, sensitive=bool(body.get("possibly_sensitive")), avatar=avatar, media=photos[:3])
+        print("Not read. Run again with --yes to spend this."); return
+    sys.path.insert(0, c.get("follow_watch_dir") or os.path.join(os.environ.get("BOTS_HOME", "/workspace"), "follow-watch"))
+    import follow_watch as fw
+    st = fw.Store(c.get("follow_watch_dir") or os.path.join(os.environ.get("BOTS_HOME", "/workspace"), "follow-watch"))
+    fc = st.load_config()
+    client = fw.XClient(st, fc, fw.Meter({**fc, "max_resources_per_run": 10 ** 9}))
+    S = g.rj(SJ, {})
+    ids = {g.best_post(x)["id"]: x["username"].lower() for x in pend}
+    L = list(ids)
+    for i in range(0, len(L), 100):
+        body = client.get("/tweets", {"ids": ",".join(L[i:i + 100]), "tweet.fields": "possibly_sensitive,attachments",
+                                      "expansions": "attachments.media_keys,author_id",
+                                      "media.fields": "type,url,preview_image_url", "user.fields": "profile_image_url"})
+        inc = body.get("includes") or {}
+        media = {m["media_key"]: m.get("url") or m.get("preview_image_url") for m in inc.get("media", []) or []}
+        users = {u["id"]: (u.get("profile_image_url") or "").replace("_normal", "_200x200") for u in inc.get("users", []) or []}
+        for t in body.get("data", []) or []:
+            h = ids.get(t["id"])
+            if not h:
+                continue
+            keys = (t.get("attachments") or {}).get("media_keys") or []
+            S[h] = dict(post=t["id"], sensitive=bool(t.get("possibly_sensitive")), avatar=users.get(t.get("author_id")),
+                        media=[media.get(k) for k in keys if media.get(k)][:3])
     json.dump(S, open(SJ, "w"), ensure_ascii=False, indent=0)
     from PIL import Image, ImageDraw
     os.makedirs(os.path.join(H, "img"), exist_ok=True); os.makedirs(os.path.join(H, "sheets"), exist_ok=True)

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Weekly replies scorecard (v1.2). Off until the owner turns it on.
+"""Weekly replies scorecard (v1.2.1). On by default. $0.
 
-Reads the content export already pulled. No X API calls, $0.
-Config replies_scorecard: {enabled: false, days: 7, top: 10, reply_types: ["reply"]}.
+Reads the content export already pulled. No X API calls.
+Config replies_scorecard: {enabled: true, days: 7, top: 10, reply_types: ["reply"]}.
+Set enabled to false to turn it off.
 """
 from datetime import date, datetime, timedelta
 
 
-DEFAULTS = {"enabled": False, "days": 7, "top": 10, "reply_types": ["reply"]}
+DEFAULTS = {"enabled": True, "days": 7, "top": 10, "reply_types": ["reply"]}
 
 
 def settings(cfg):
@@ -20,7 +21,7 @@ def settings(cfg):
             block = {"enabled": raw}
     out = dict(DEFAULTS)
     out.update({k: v for k, v in block.items() if v is not None})
-    out["enabled"] = bool(out.get("enabled", False))
+    out["enabled"] = bool(out.get("enabled", True))
     return out
 
 
@@ -91,5 +92,5 @@ def scorecard(posts, cfg=None, today=None):
 
 
 def off_line():
-    return ("Replies scorecard is off. It reads the content export already pulled and costs $0. "
-            "Set replies_scorecard.enabled to true to turn it on.")
+    return ("Replies scorecard is off in this config. It is on by default, reads the content export "
+            "already pulled, and costs $0. Set replies_scorecard.enabled to true to turn it back on.")

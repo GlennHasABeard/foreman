@@ -1,6 +1,6 @@
 # Reply Queue alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot reply-queue` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.1 --bot reply-queue` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` plus `qol_leads.py` into `$BOTS_HOME/engagement`. Scripts only, never a sign-in or token file.

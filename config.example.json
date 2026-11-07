@@ -27,6 +27,6 @@
                    "max_per_tool": 2, "stale_review_days": 3},
   "analytics-log": {"timezone": null, "has_premium": null, "has_monetization": null, "sheet_id": "",
                     "tracker_upsert": true, "tracker_col_a_file": "",
-                    "replies_scorecard": {"enabled": false, "days": 7, "top": 10, "reply_types": ["reply"]}},
+                    "replies_scorecard": {"enabled": true, "days": 7, "top": 10, "reply_types": ["reply"]}},
   "secrets_needed_as_stored_secrets": ["X_CLIENT_ID", "X_CLIENT_SECRET", "CLOUDFLARE_API_TOKEN (hosting only)", "CLOUDFLARE_ACCOUNT_ID (hosting only)"]
 }

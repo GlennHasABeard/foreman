@@ -10,7 +10,7 @@ the running records. It makes no X API calls and changes nothing on X.
                                                  folder (test_data/) and never touch the running records
   python3 x_analytics.py seal [PULL_DIR]         parse a pull (default: the newest) and update the records
                                                  The manifest key stays "finished". There is no finish alias.
-  python3 x_analytics.py scorecard               weekly replies scorecard, off until replies_scorecard.enabled is true
+  python3 x_analytics.py scorecard               weekly replies scorecard, on by default, $0, reads the export already pulled
   python3 x_analytics.py status                  the last few pulls and their flags
 
 Every pull folder is named by its local start time and kind, for example
@@ -1414,7 +1414,7 @@ def cmd_status(p):
 
 
 def cmd_scorecard(p):
-    """Weekly scorecard from the content export already pulled. Off by default. $0."""
+    """Weekly scorecard from the content export already pulled. On by default. $0."""
     cfg = p.cfg()
     if not replies_scorecard.enabled(cfg):
         print(replies_scorecard.off_line())

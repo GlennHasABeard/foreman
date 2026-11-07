@@ -147,7 +147,8 @@ def run_cost_line(records, est_cost, est_cost_raw=None):
     if est_cost_raw is not None and abs(est_cost - float(est_cost_raw)) > 0.005:
         return (f"Run cost: {records:,} records read, about ${est_cost:.2f} "
                 f"(unscaled ${float(est_cost_raw):.2f}). Spend caps use the unscaled rates.")
-    return f"Run cost: {records:,} records read, about ${est_cost:.2f}."
+    return (f"Run cost: {records:,} records read, about ${est_cost:.2f} "
+            "(price-table estimate, unscaled). Spend caps use this unscaled rate.")
 
 
 def cached_read(cache, key, fetch):

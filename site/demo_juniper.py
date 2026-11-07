@@ -212,7 +212,7 @@ def render_html(payload, home_marks):
     nav = [("Home", "index.html"), ("Reply Queue", "reply-queue.html"), ("Fan Finder", "fan-finder.html"),
            ("Follow Finder", "follow-finder.html"), ("Shoutout Picker", "shoutout-picker.html"),
            ("Rerun Picker", "rerun-picker.html"), ("Follow Audit", "follow-audit.html"),
-           ("Analytics Log", "analytics-log.html")]
+           ("Analytics Log", "analytics-log.html"), ("Your week", "week.html")]
     updated = "Updated Nov 5, 2026, 10:00 AM ET"
     html_dir = os.path.join(OUT, "html")
     os.makedirs(html_dir, exist_ok=True)
@@ -229,6 +229,8 @@ def render_html(payload, home_marks):
                                          tracker=pages["analytics-log"]["tracker"]),
     }
     for title, href in nav[1:]:
+        if title == "Your week":
+            continue
         body = bodies[title]
         marks = home_marks if title == "Reply Queue" else {"never": {}, "done": {}, "stages": {}, "notes": {}, "follow_ups": {}}
         text = P.shell(title, P.SLUG(title), updated, "Demo data.", body, marks, nav, demo=True, hosted=False)
@@ -239,6 +241,65 @@ def render_html(payload, home_marks):
     home = P.home(panels, {}, None, [("followers", "2,400")], [])
     with open(os.path.join(html_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(P.shell("Home", "home", updated, "Demo data.", home, home_marks, nav, demo=True, hosted=False))
+    _write_week_and_scenarios(P, html_dir, nav, bodies, pages, updated, home_marks)
+
+
+def _write_page(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def _write_week_and_scenarios(P, html_dir, nav, bodies, pages, updated, home_marks):
+    """Crew week page, one nonmonetized Analytics page, and one folder per solo bot.
+
+    There is no dispatch.html. Dispatch health is the first card on week.html.
+    """
+    empty = {"never": {}, "done": {}, "stages": {}, "notes": {}, "follow_ups": {}}
+    analytics = pages["analytics-log"]
+    sections = [
+        ("Dispatch", "", "Ran OK", [], ["Crew health from the seven bots. Demo data."]),
+        ("Reply Queue", "reply-queue.html", "Ran OK", [("waiting", "1")], ["Median time to reply: 42 min."]),
+        ("Fan Finder", "fan-finder.html", "Ran OK", [], [pages["fan-finder"]["backlog"]]),
+        ("Follow Finder", "follow-finder.html", "Ran OK", [], ["40 kept in the free pre-screen"]),
+        ("Shoutout Picker", "shoutout-picker.html", "Ran OK", [], ["Demo data."]),
+        ("Rerun Picker", "rerun-picker.html", "Ran OK", [], ["Demo data."]),
+        ("Follow Audit", "follow-audit.html", "Ran OK", [("followers", "2,400")], ["Demo data."]),
+        ("Analytics Log", "analytics-log.html", "Ran OK", [("followers", "2,400")], ["500K chart is on for this crew page."]),
+    ]
+    totals = [("followers", "2,400", "Demo data."), ("median reply", "42 min", "From Done timestamps.")]
+    week_body = P.week(sections, totals, "Nov 1 to Nov 7") + P.week_unused(["linen_demo"])
+    _write_page(os.path.join(html_dir, "week.html"),
+                P.shell("Your week", "week", updated, "Demo data.", week_body, empty, nav, demo=True, hosted=False))
+    unmon = P.analytics_log(analytics["posts"], analytics["followers"], analytics["verified"], False, None,
+                            days=90, tracker=analytics["tracker"])
+    if "500K" in unmon:
+        raise SystemExit("Nonmonetized Analytics page included the 500K chart.")
+    solo_nav_analytics = [("Analytics Log", "analytics-log.html"), ("Your week", "week.html")]
+    _write_page(os.path.join(html_dir, "scenarios", "analytics-nonmonetized", "analytics-log.html"),
+                P.shell("Analytics Log", "analytics-log", updated, "Demo data. Not monetized.", unmon, empty,
+                        solo_nav_analytics, demo=True, hosted=False))
+    slug_for = {
+        "Reply Queue": "reply-queue", "Fan Finder": "fan-finder", "Follow Finder": "follow-finder",
+        "Shoutout Picker": "shoutout-picker", "Rerun Picker": "rerun-picker", "Follow Audit": "follow-audit",
+        "Analytics Log": "analytics-log",
+    }
+    for title, href in nav:
+        if title in ("Home", "Your week"):
+            continue
+        slug = slug_for[title]
+        folder = os.path.join(html_dir, "scenarios", "solo", slug)
+        one_nav = [(title, href), ("Your week", "week.html")]
+        body = unmon if title == "Analytics Log" else bodies[title]
+        status = "Demo data. Not monetized." if title == "Analytics Log" else "Demo data."
+        _write_page(os.path.join(folder, href),
+                    P.shell(title, P.SLUG(title), updated, status, body, empty, one_nav, demo=True, hosted=False))
+        one_week = P.week([(title, href, "Ran OK", [], ["This solo week lists only this bot. Demo data."])],
+                          [("bots", "1", "Solo fixture.")], "Nov 1 to Nov 7")
+        _write_page(os.path.join(folder, "week.html"),
+                    P.shell("Your week", "week", updated, "Demo data.", one_week, empty, one_nav, demo=True, hosted=False))
+        _write_page(os.path.join(folder, "index.html"),
+                    f'<!doctype html><meta http-equiv="refresh" content="0;url={href}">')
 
 
 def readme(labels):
@@ -269,6 +330,18 @@ def readme(labels):
         "Publish that page from this fixture, still with no Game LIVE flag:",
         "",
         "    BOTS_HOME=demo/juniper/bots SITE_DIR=demo/juniper/published LISTS_DEMO=1 python3 site/publish_lists.py --dry-run",
+        "",
+        "Dependencies: Python 3 standard library only. No pip packages and no network.",
+        "Run from the pack root. The command rewrites demo/juniper/html/ and",
+        "demo/juniper/html/scenarios/. It also writes gitignored local files",
+        "demo/juniper/bots/engagement/config.json and data/. Those two are not part of the pack.",
+        "",
+        "Pages: index.html is Home. There is no dispatch.html.",
+        "Dispatch health is the first card on week.html, titled Dispatch.",
+        "Your week is week.html. The seven bot pages sit next to Home.",
+        "scenarios/analytics-nonmonetized/analytics-log.html hides the 500K chart.",
+        "scenarios/solo/<slug>/ is that bot alone, with a week page that lists only that bot.",
+        "The Analytics Log solo page is the nonmonetized one.",
         "",
     ])
 

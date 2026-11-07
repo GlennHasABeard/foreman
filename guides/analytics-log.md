@@ -1,6 +1,6 @@
 # Analytics Log alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot analytics-log` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.1 --bot analytics-log` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `analytics-log/x_analytics.py`, `sheets_sync.py` and `replies_scorecard.py` into `$BOTS_HOME/x-analytics`. Scripts only, never a sign-in or token file.
@@ -9,7 +9,7 @@ Copy `analytics-log/x_analytics.py`, `sheets_sync.py` and `replies_scorecard.py`
 Ask only these and save them in `$BOTS_HOME/x-analytics/config.json`: `has_premium`, `has_monetization`. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Analytics Log notes
-Parse a pull with `x_analytics.py seal`. The manifest key is still `finished`. There is no `finish` alias. The tracker is an upsert: a re-pull for the same date updates that row. `replies_scorecard` ships **off** (`enabled: false`). Turn it on only if the owner asks. It reads the content export already pulled and costs $0.
+Parse a pull with `x_analytics.py seal`. The manifest key is still `finished`. There is no `finish` alias. The tracker is an upsert: a re-pull for the same date updates that row. `replies_scorecard` is **on** by default and costs $0. It reads the content export already pulled. Setup installs the Sunday routine. Set `enabled` to false only if the owner asks.
 
 Analytics Log uses no X API and no X secrets. It needs the bot's own browser signed in to X on the analytics page. Ask the owner to open the bot's computer and sign in to X there themselves. Never ask for their password. Payouts are optional. Without monetization it writes "not available on this account". The per-video list and the payouts list are copied only when X's list changed. An identical copy is skipped and the saved copy is kept.
 

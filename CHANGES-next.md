@@ -1,12 +1,12 @@
 # Changes for the next release
 
-v1.2.0 prep ports the items below into the template pack. Nothing here is tagged.
+v1.2.0 prep ports the items below into the template pack. v1.2.1 is the correction pin. The v1.2.0 release stays published until v1.2.1 is tagged.
 
 ## Shipped in this prep
 
 ### Follow Finder
 - Game tab stays off until `creator-scout/game/LIVE` exists.
-- Unofficial embed caveat: Daily Pack uses `platform.twitter.com/widgets.js`, and blind cards plus vision sheets may read `cdn.syndication.twimg.com`. $0. If it breaks, saved post text remains and unrated picks stay blurred. Media expansions stay off.
+- Game embed uses only the official embed widget. v1.2.1 removes the unofficial embed path. Saved post text remains if an embed does not load. Unrated picks stay blurred.
 
 ### Analytics Log
 - 500K leave-window card (already in the pack, covered by `tests/test_v12_leave_window.py`).

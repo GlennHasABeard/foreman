@@ -31,6 +31,10 @@ If this bot was set up from its individual template (even if a Foreman crew is a
 
 `pick` leaves out personal updates (pets, family, health: `personal_terms`), partner or #ad posts (`brand_terms`, `skip_terms`, or a tag of a `brand_handles` account), shoutout posts (the word shoutout plus an @tag), time-bound posts (`time_terms` such as "ends today", "ends tonight", "ends soon", "tonight"; words inside quotes are ignored) and posts under `min_words` (5) words once links and hashtags are removed. The report counts each reason.
 
+## Stale review nudge
+
+Setup installs the "Stale review nudge" routine from `routine.json` on the same weekly schedule as the picks. It runs `rerun_picker.py nudge` by itself. That command writes one line when the review is stale and no rejects are synced. It never builds. Do not leave this as a manual note only.
+
 ## What you do
 
 Script: `$BOTS_HOME/reruns/rerun_picker.py`.

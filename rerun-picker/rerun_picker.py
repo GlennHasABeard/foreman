@@ -548,7 +548,7 @@ def cmd_render(st, path):
 
 
 def cmd_media_list(st):
-    """Videos for picks left after rejects. Nothing is downloaded before the build."""
+    """Videos for picks left after rejects. Nothing until rejects exist. Nothing is downloaded."""
     picks = _latest_picks(st)
     rejects = read_json(os.path.join(st.picks_dir, "rejects.json"), [])
     if isinstance(rejects, dict):

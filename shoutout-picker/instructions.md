@@ -23,6 +23,10 @@ Weekly list of people worth a shoutout.
 
 If this bot was set up from its individual template (even if a Foreman crew is also here), `CREW_BOT="Shoutout Picker" python3 $BOTS_HOME/follow-watch/bot_spend.py mode` says standalone. Then the cap and timezone are in this bot's own `$BOTS_HOME/shoutouts/config.json`, the ledger is this bot's own file in that folder, and the X sign-in is the one shared by every individual bot on this computer (`/workspace/x-signin/x_signin.json`, or a Foreman crew's `dispatch/x_signin.json` if there is one). If it ever needs redoing, this bot redoes it (see `guides/shoutout-picker.md`, with the 30 second warning before the link). For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`.
 
+## Rollover account check (off)
+
+At setup, before writing config, say this and wait for an answer: the check that drops deleted or suspended rollover accounts is off. If they turn it on, one batched lookup runs each weekly rollover, about $0.01, about $0.04 a month. Default the saved value to `rollover_lookup: false` unless they say yes.
+
 ## What you do
 
 Script: `$BOTS_HOME/shoutouts/shoutout_desk.py`. Needs Follow Audit data.

@@ -1,16 +1,19 @@
-# Foreman v1.2.0 patch notes
+# Foreman v1.2.1 patch notes
 
-Prep notes for the next release. This pack is not tagged yet. Install links stay on the last tagged release until that tag exists.
+Install pins point at v1.2.1. Published v1.2.0 stays in place until this release is tagged. Its release note then is: superseded by v1.2.1, install that instead.
 
 ## Off until you turn them on
 
 - **Follow Finder Game.** Say "turn on Game" to create `creator-scout/game/LIVE`. Until then the tab is not published.
-- **Shoutout rollover lookup** (`rollover_lookup`, default false). When on, one batched `users/by` drops deleted or suspended accounts before review. **About $0.01 per rollover.** Leave it off unless you want that spend.
-- **Replies scorecard** (`replies_scorecard.enabled`, default false). When on, it reads the content export already pulled and costs $0. It does not turn itself on.
+- **Shoutout rollover lookup** stays off. Setup says that turning it on costs about $0.01 each weekly rollover, about $0.04 a month.
+
+## On by default
+
+- **Replies scorecard** is on by default in v1.2.1 and costs $0. It reads the content export already pulled. Setup installs the Sunday routine.
 
 ## Game embeds
 
-The Daily Pack uses X's free embed widget (`platform.twitter.com/widgets.js`). Blind cards and vision sheets also read the free embed data at `cdn.syndication.twimg.com`. That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall back to the saved post text and unrated picks stay blurred. Media expansions stay off. Nothing on this path calls a paid X or vision API.
+The Daily Pack uses only X's official embed widget (`platform.twitter.com/widgets.js`). If an embed does not load, the card shows the saved post text. Unrated picks stay blurred. v1.2.1 does not ship an unofficial embed path.
 
 ## What each bot gained
 
@@ -19,8 +22,10 @@ The Daily Pack uses X's free embed widget (`platform.twitter.com/widgets.js`). B
 - **Shoutout Picker.** Flagged mutuals left out or ranked last. Fresh rollovers keep last week's verdict. Week N on every pick. One extra band of 20 when the list is short. `catch-up` reads saved posts only.
 - **Reply Queue.** One row per account, questions first, 24-hour mute in the browser, new chip, low-value fold, thread cards. Done marks save `{done: 1, at: time}`. Pulls read your own likes, mark items you already liked, and write a coverage block. A cap stop leads with the capped-pull line. Trial caps are generic (`apply_trial`, `log_trial`).
 - **Fan Finder.** "N people still engaging who don't follow you yet (±D vs last week)". Backlog leads expire after 30 days. Every qualified lead is tracked in `leads_seen.json`. Stored likes still count when new like pulls are off.
-- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `media-list`, `nudge`.
-- **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Scorecard off.
+- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `nudge` installed at setup. `media-list` returns no videos until a reject list exists.
+- **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Replies scorecard on by default, $0.
+- **Reply Queue radar line.** The header keeps the new item count and adds the displayed card count.
+- **Narrow phones.** Filter rows wrap instead of clipping the last chip. The row is held to the page width. The same display rule is on every page that uses that row.
 
 A capped pull shows one line: "Capped pull: skipped … (cost cap $X reached)".
 

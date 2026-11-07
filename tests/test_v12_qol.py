@@ -466,11 +466,39 @@ class V121Defaults(unittest.TestCase):
         self.assertEqual(scout["lang_balance"], {})
 
     def test_filter_row_wraps_and_keeps_labels(self):
+        # flex-wrap alone did not wrap. The row is a flex item, so its minimum
+        # width stayed the full button line and the phone clipped Quotes.
+        # The shipped page CSS must force the row to the page width.
         import pages_v11
-        css = pages_v11.CSS
-        seg = css.split(".seg{", 1)[1].split("}", 1)[0]
+        page = open(os.path.join(ROOT, "demo", "juniper", "html", "reply-queue.html"), encoding="utf-8").read()
+        css = page.split("<style>", 1)[1].split("</style>", 1)[0]
+        seg_rules = [part.split("}", 1)[0] for part in css.split(".seg{")[1:]]
+        self.assertTrue(seg_rules)
+        seg = seg_rules[0]
         self.assertIn("flex-wrap:wrap", seg)
-        self.assertNotIn("overflow:hidden", seg)
+        self.assertIn("width:100%", seg)
+        self.assertIn("min-width:0", seg)
+        self.assertNotIn("overflow", seg)
+        self.assertNotIn("nowrap", seg)
+        self.assertNotIn("inline-flex", seg)
+        for later in seg_rules[1:]:
+            self.assertNotIn("nowrap", later)
+            self.assertNotIn("overflow", later)
+        chips = css.split(".chips{", 1)[1].split("}", 1)[0]
+        self.assertIn("flex-wrap:wrap", chips)
+        self.assertIn("min-width:0", chips)
+        source_seg = pages_v11.CSS.split(".seg{", 1)[1].split("}", 1)[0]
+        self.assertEqual(source_seg, seg)
+        html_root = os.path.join(ROOT, "demo", "juniper", "html")
+        for dirpath, _dirs, names in os.walk(html_root):
+            for name in names:
+                if not name.endswith(".html"):
+                    continue
+                text = open(os.path.join(dirpath, name), encoding="utf-8").read()
+                if "<style>" not in text or ".seg{" not in text:
+                    continue
+                shipped = text.split(".seg{", 1)[1].split("}", 1)[0]
+                self.assertEqual(shipped, source_seg, name)
         body = pages_v11.reply_queue(
             [{"key": "1", "username": "moss_demo", "chips": [{"t": "reply"}, {"t": "question"}],
               "text": "Demo data.", "links": [], "question": True, "g": "Everyone else"}],

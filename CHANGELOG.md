@@ -15,7 +15,7 @@ Install pins point at v1.2.1. Published v1.2.0 stays available. Its release note
 - The Game uses only the official embed widget. The unofficial embed path is not in this pack.
 - Radar header keeps the new item count and adds the card count, for example "5 new items in 2 cards."
 - Follow Audit run-cost line says it is the unscaled price-table estimate. Spend caps use that unscaled rate. That wording stays.
-- Filter rows wrap on a narrow phone instead of clipping the last chip. Same display rule on every page that uses that row.
+- Filter rows wrap on a narrow phone instead of clipping the last chip. The row is held to the page width, because wrap alone still let the bar stay one long line. Same display rule on every page that uses that row.
 - Owner accepted the Nov 1–7 live review on Nov 7, 2026. Three clean days, as the owner defined them, means the crew ran live for three or more days with no confirmed functional regression. The review did not see every branch. That limit stays on the record. Template defaults are covered by tests. Stranger installs are a check after publication.
 - Fixture tests are the accepted proof for mute expiry, the capped-pull warning, a missing verified export, and the tracker upsert.
 

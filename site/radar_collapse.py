@@ -104,7 +104,7 @@ def _root(item):
 def prepare_radar(items, prev_run=None, now=None, min_people=2, thread_rollup=True, min_minutes=30):
     """Collapse radar items into the rows the page and the markdown report show.
 
-    Returns {rows, new_count, low_count, accounts, items}.
+    Returns {rows, new_count, new_cards, low_count, accounts, items}.
     A row's `more` is the extra posts from that account. `fold` holds them.
     `low` is the single emoji / gm / link-only summary. `thread` is set on a
     rolled-up conversation. `new` is true when any post in the row is new.
@@ -178,6 +178,7 @@ def prepare_radar(items, prev_run=None, now=None, min_people=2, thread_rollup=Tr
     return {
         "rows": rows,
         "new_count": len(new_items),
+        "new_cards": sum(1 for r in rows if r.get("new")),
         "low_count": len(low),
         "accounts": len({i["username"].lower() for i in norm if i["username"]}),
         "items": len(norm),
@@ -185,11 +186,17 @@ def prepare_radar(items, prev_run=None, now=None, min_people=2, thread_rollup=Tr
 
 
 def md_lines(prepared):
-    """One line per account, with +N more. The new count leads."""
+    """One line per account, with +N more. Item count and card count both lead."""
     lines = []
-    n = prepared.get("new_count") or 0
+    n = int(prepared.get("new_count") or 0)
+    if prepared.get("new_cards") is None:
+        cards = sum(1 for r in prepared.get("rows") or [] if r.get("new"))
+    else:
+        cards = int(prepared.get("new_cards") or 0)
     if n:
-        lines.append(f"{n} new items since last run. Displayed cards can be fewer after folding.")
+        items = "item" if n == 1 else "items"
+        card_word = "card" if cards == 1 else "cards"
+        lines.append(f"{n} new {items} in {cards} {card_word}.")
     for row in prepared.get("rows") or []:
         if row.get("low"):
             lines.append(f"- {row['text']}")

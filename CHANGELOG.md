@@ -4,15 +4,19 @@ All Foreman releases. Each template has its own section, plus "All individual te
 
 ## v1.2.1 (2026-11-07)
 
-Correction prepared on top of published v1.2.0. Not tagged and not released in this change. Download instructions still name the published v1.2.0 release.
+Install pins point at v1.2.1. Published v1.2.0 stays available. Its release note, when this tag is published, is: superseded by v1.2.1, install that instead.
 
+- Pack version in `foreman/standalone.json` is v1.2.1.
 - Replies scorecard is on by default and costs $0. Setup installs the Sunday routine.
 - Language floor stays off until setup. Setup asks which languages to favor and what minimum share each one gets. No language is filled in for the owner.
 - Rollover account check stays off. Setup states the monthly cost, about $0.04 if it runs every week.
 - Rerun Picker setup installs the stale-review nudge routine. It is not a manual note only.
+- `media-list` returns no videos until a reject list exists. An empty list is not a reject list.
 - The Game uses only the official embed widget. The unofficial embed path is not in this pack.
-- Radar "new" header counts items. Displayed cards can be fewer after folding.
-- Follow Audit run-cost line says it is the unscaled price-table estimate. Spend caps use that unscaled rate.
+- Radar header keeps the new item count and adds the card count, for example "5 new items in 2 cards."
+- Follow Audit run-cost line says it is the unscaled price-table estimate. Spend caps use that unscaled rate. That wording stays.
+- Owner accepted the Nov 1–7 live review on Nov 7, 2026. Three clean days, as the owner defined them, means the crew ran live for three or more days with no confirmed functional regression. The review did not see every branch. That limit stays on the record. Template defaults are covered by tests. Stranger installs are a check after publication.
+- Fixture tests are the accepted proof for mute expiry, the capped-pull warning, a missing verified export, and the tracker upsert.
 
 ## v1.2.0 (2026-11-05)
 

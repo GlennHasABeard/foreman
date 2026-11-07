@@ -1,6 +1,6 @@
-# Foreman v1.2.0 patch notes
+# Foreman v1.2.1 patch notes
 
-Prep notes for the next release. This pack is not tagged yet. Install links stay on the last tagged release until that tag exists.
+Install pins point at v1.2.1. Published v1.2.0 stays in place until this release is tagged. Its release note then is: superseded by v1.2.1, install that instead.
 
 ## Off until you turn them on
 
@@ -19,8 +19,9 @@ The Daily Pack uses only X's official embed widget (`platform.twitter.com/widget
 - **Shoutout Picker.** Flagged mutuals left out or ranked last. Fresh rollovers keep last week's verdict. Week N on every pick. One extra band of 20 when the list is short. `catch-up` reads saved posts only.
 - **Reply Queue.** One row per account, questions first, 24-hour mute in the browser, new chip, low-value fold, thread cards. Done marks save `{done: 1, at: time}`. Pulls read your own likes, mark items you already liked, and write a coverage block. A cap stop leads with the capped-pull line. Trial caps are generic (`apply_trial`, `log_trial`).
 - **Fan Finder.** "N people still engaging who don't follow you yet (±D vs last week)". Backlog leads expire after 30 days. Every qualified lead is tracked in `leads_seen.json`. Stored likes still count when new like pulls are off.
-- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `media-list`, `nudge`.
-- **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Scorecard off.
+- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `nudge` installed at setup. `media-list` returns no videos until a reject list exists.
+- **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Replies scorecard on by default, $0.
+- **Reply Queue radar line.** The header keeps the new item count and adds the displayed card count.
 
 A capped pull shows one line: "Capped pull: skipped … (cost cap $X reached)".
 

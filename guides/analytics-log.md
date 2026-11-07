@@ -1,6 +1,6 @@
 # Analytics Log alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot analytics-log` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.1 --bot analytics-log` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `analytics-log/x_analytics.py`, `sheets_sync.py` and `replies_scorecard.py` into `$BOTS_HOME/x-analytics`. Scripts only, never a sign-in or token file.

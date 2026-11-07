@@ -172,8 +172,11 @@ class Rerun(unittest.TestCase):
             [{"url": "https://x.com/a/status/1", "format": "video"}, {"url": "https://x.com/a/status/2", "format": "photo"}],
             ["https://x.com/a/status/1"])
         self.assertEqual(left, [])
-        left = qol_rerun.media_list([{"url": "https://x.com/a/status/9", "format": "video"}], [])
-        self.assertEqual(len(left), 1)
+        video = {"url": "https://x.com/a/status/9", "format": "video"}
+        other = {"url": "https://x.com/a/status/8", "format": "video"}
+        self.assertEqual(qol_rerun.media_list([video], None), [])
+        self.assertEqual(qol_rerun.media_list([video], []), [])
+        self.assertEqual(qol_rerun.media_list([video, other], ["https://x.com/a/status/9"]), [other])
         self.assertIn("no build", qol_rerun.nudge_line(4, False, 3))
         self.assertIsNone(qol_rerun.nudge_line(4, True, 3))
         self.assertIsNone(qol_rerun.nudge_line(1, False, 3))
@@ -196,8 +199,24 @@ class Radar(unittest.TestCase):
         self.assertEqual(prep["rows"][0]["username"], "bea")
         self.assertTrue(any(r["low"] for r in prep["rows"]))
         lines = radar_collapse.md_lines(prep)
-        self.assertIn("new items since last run", lines[0])
+        self.assertGreater(prep["new_count"], prep["new_cards"])
+        self.assertEqual(lines[0], f"{prep['new_count']} new items in {prep['new_cards']} cards.")
         self.assertTrue(any("+1 more" in line for line in lines))
+
+    def test_folded_new_items_and_cards(self):
+        now = "2026-11-05T12:00:00+00:00"
+        prev = "2026-11-05T08:00:00+00:00"
+        items = [
+            {"id": str(i), "username": "ada", "text": f"note {i} about the river light",
+             "created": f"2026-11-05T09:{i:02d}:00+00:00", "kind": "reply"}
+            for i in range(1, 5)
+        ]
+        items.append({"id": "9", "username": "bea", "text": "a separate question about paper",
+                      "created": "2026-11-05T11:00:00+00:00", "kind": "reply"})
+        prep = radar_collapse.prepare_radar(items, prev_run=prev, now=now)
+        self.assertEqual(prep["new_count"], 5)
+        self.assertEqual(prep["new_cards"], 2)
+        self.assertEqual(radar_collapse.md_lines(prep)[0], "5 new items in 2 cards.")
 
     def test_thread_rollup(self):
         items = [

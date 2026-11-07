@@ -1,6 +1,6 @@
 # Follow Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.0 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.1 --bot follow-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
 
 ## Install
 Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `follow-finder/creator_scout.py` plus `qol_scout.py` into `$BOTS_HOME/creator-scout`. Scripts only, never a sign-in or token file.

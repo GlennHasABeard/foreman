@@ -465,6 +465,26 @@ class V121Defaults(unittest.TestCase):
         scout = json.load(open(os.path.join(ROOT, "config.example.json"), encoding="utf-8"))["follow-finder"]
         self.assertEqual(scout["lang_balance"], {})
 
+    def test_filter_row_wraps_and_keeps_labels(self):
+        import pages_v11
+        css = pages_v11.CSS
+        seg = css.split(".seg{", 1)[1].split("}", 1)[0]
+        self.assertIn("flex-wrap:wrap", seg)
+        self.assertNotIn("overflow:hidden", seg)
+        body = pages_v11.reply_queue(
+            [{"key": "1", "username": "moss_demo", "chips": [{"t": "reply"}, {"t": "question"}],
+              "text": "Demo data.", "links": [], "question": True, "g": "Everyone else"}],
+            {"lines": ["Median time to reply: 42 min (n=1)"]}, {}, None)
+        for label in ("All", "New since last run", "Questions", "Mentions", "Replies", "Quotes", "Regulars"):
+            self.assertIn(label, body)
+        fan = pages_v11.fan_finder([], {"lines": []}, {})
+        for label in ("All", "New", "Engaged", "Talked", "Done"):
+            self.assertIn(label, fan)
+        shout = pages_v11.shoutout_picker(
+            [{"username": "linen_demo", "followers": 10, "week_label": "week 1"}], {"lines": []}, False)
+        for label in ("All", "Pending", "Done"):
+            self.assertIn(label, shout)
+
 
 if __name__ == "__main__":
     unittest.main()

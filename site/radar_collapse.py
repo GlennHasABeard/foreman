@@ -189,7 +189,7 @@ def md_lines(prepared):
     lines = []
     n = prepared.get("new_count") or 0
     if n:
-        lines.append(f"{n} new since last run.")
+        lines.append(f"{n} new items since last run. Displayed cards can be fewer after folding.")
     for row in prepared.get("rows") or []:
         if row.get("low"):
             lines.append(f"- {row['text']}")

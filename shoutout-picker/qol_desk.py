@@ -12,18 +12,32 @@ LEAVE_OUT = {"likely fake", "spam signals", "never posted"}
 RANK_LAST = {"watch", "inactive", "dormant"}
 GONE = {"deleted", "suspended", "deactivated"}
 ROLLOVER_COST = 0.01
+ROLLOVERS_PER_MONTH = 4
+
+
+def rollover_monthly_cost():
+    """About four weekly rollovers. Shown at setup. The check stays off until the owner says yes."""
+    return ROLLOVER_COST * ROLLOVERS_PER_MONTH
 
 
 def rollover_lookup_on(cfg):
     return bool((cfg or {}).get("rollover_lookup", False))
 
 
+def rollover_setup_line():
+    """Say this during setup, before the owner answers. Default remains off."""
+    month = rollover_monthly_cost()
+    return (f"The deleted or suspended account check is off. If you turn it on, one batched lookup "
+            f"runs each weekly rollover, about ${ROLLOVER_COST:.2f}, about ${month:.2f} a month. "
+            "Leave it off unless you want that spend.")
+
+
 def rollover_cost_line(on):
+    month = rollover_monthly_cost()
     if on:
         return ("Rollover lookup is on. One batched users/by drops deleted or suspended accounts "
-                f"before review. About ${ROLLOVER_COST:.2f} per rollover.")
-    return ("Rollover lookup is off. Set rollover_lookup to true to drop deleted or suspended "
-            f"accounts before review. That is one batched users/by, about ${ROLLOVER_COST:.2f} per rollover.")
+                f"before review. About ${ROLLOVER_COST:.2f} per rollover, about ${month:.2f} a month.")
+    return rollover_setup_line()
 
 
 def classify_users_by(body, requested):

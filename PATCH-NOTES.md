@@ -5,12 +5,12 @@ Prep notes for the next release. This pack is not tagged yet. Install links stay
 ## Off until you turn them on
 
 - **Follow Finder Game.** Say "turn on Game" to create `creator-scout/game/LIVE`. Until then the tab is not published.
-- **Shoutout rollover lookup** (`rollover_lookup`, default false). When on, one batched `users/by` drops deleted or suspended accounts before review. **About $0.01 per rollover.** Leave it off unless you want that spend.
-- **Replies scorecard** (`replies_scorecard.enabled`, default false). When on, it reads the content export already pulled and costs $0. It does not turn itself on.
+- **Shoutout rollover lookup** stays off. Setup says that turning it on costs about $0.01 each weekly rollover, about $0.04 a month.
+- **Replies scorecard** is on by default in v1.2.1 and costs $0. It reads the content export already pulled. Setup installs the Sunday routine.
 
 ## Game embeds
 
-The Daily Pack uses X's free embed widget (`platform.twitter.com/widgets.js`). Blind cards and vision sheets also read the free embed data at `cdn.syndication.twimg.com`. That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall back to the saved post text and unrated picks stay blurred. Media expansions stay off. Nothing on this path calls a paid X or vision API.
+The Daily Pack uses only X's official embed widget (`platform.twitter.com/widgets.js`). If an embed does not load, the card shows the saved post text. Unrated picks stay blurred. v1.2.1 does not ship an unofficial embed path.
 
 ## What each bot gained
 

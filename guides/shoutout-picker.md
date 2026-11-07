@@ -9,7 +9,7 @@ Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_r
 Ask only these and save them in `$BOTS_HOME/shoutouts/config.json`: `account_kinds`, `labels`, `min_followers`, `max_followers`, `list_size`, `weekly_goal` (how many shoutout posts a week they aim for, blank is fine). Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Shoutout Picker notes
-Rollover lookup ships **off** (`rollover_lookup: false`). Turning it on runs one batched users/by per rollover and drops deleted or suspended accounts before review. That costs about $0.01 per rollover. Leave it off unless the owner asks.
+Rollover lookup ships **off** (`rollover_lookup: false`). At setup, say it is off and, if turned on, costs about $0.01 each weekly rollover, about $0.04 a month. Leave it off unless the owner asks.
 
 Every pick shows week N. Week 1 adds "· new" or "· runner-up promoted". `catch-up --dry-run` updates the log from saved posts only, with no X calls. Flagged mutuals marked likely fake, spam signals or never posted are left out and named. `watch`, `inactive` and `dormant` are ranked last. When keeps are short, week adds one extra band of `thin_pool_extra` (20) and stops without saving a second band.
 

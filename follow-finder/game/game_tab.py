@@ -297,17 +297,13 @@ def week_start():
     d = now().date(); return (d - dt.timedelta(days=d.weekday())).isoformat()
 
 EMBED_CAVEAT = (
-    "The Daily Pack uses X's free embed widget (platform.twitter.com/widgets.js). "
-    "Blind cards and vision sheets also read the free embed data at cdn.syndication.twimg.com. "
-    "That path is unofficial and undocumented. It costs $0, but X can change or block it without notice. "
-    "If it breaks, cards fall back to the saved post text and unrated picks stay blurred. "
-    "Media expansions stay off. Nothing here calls a paid X or vision API."
+    "The Daily Pack uses only X's official embed widget (platform.twitter.com/widgets.js). "
+    "If an embed does not load, the card shows the saved post text. Unrated picks stay blurred."
 )
 
 
 def blind_media(deck):
-    """Blind cards use the official embed widget under a solid cover. The page may also read the
-    unofficial syndication embed. No network here, $0. See EMBED_CAVEAT."""
+    """Blind cards use the official embed widget under a solid cover. No network here, $0. See EMBED_CAVEAT."""
     for x in deck:
         x["bmedia"] = []
         x["bdate"] = (x.get("created") or "")[:10]

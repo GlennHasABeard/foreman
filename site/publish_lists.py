@@ -524,10 +524,8 @@ def game_live():
 def game_publish():
     """Ship game.json and put the Game tab on the FINAL follow-finder.html. Never ships game data when off.
 
-    The Daily Pack uses X's free embed widget (platform.twitter.com/widgets.js). Blind cards and vision
-    sheets also read the free embed data at cdn.syndication.twimg.com. That path is unofficial and
-    undocumented. It costs $0, but X can change or block it without notice. If it breaks, cards fall
-    back to the saved post text and unrated picks stay blurred. Media expansions stay off.
+    The Daily Pack uses only X's official embed widget (platform.twitter.com/widgets.js).
+    If an embed does not load, the card shows the saved post text. Unrated picks stay blurred.
     """
     gj = os.path.join(SITE_DIR, "game.json")
     if not game_live():

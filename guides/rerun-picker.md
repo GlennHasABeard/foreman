@@ -9,7 +9,7 @@ Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_r
 Ask only these and save them in `$BOTS_HOME/reruns/config.json`: `picks`, `min_age_days`, `min_ratio`, `media_only`, `skip_media_types`, `skip_terms`, `max_cost_per_pull`, and `brand_handles`: "Which brands or partners do you post for (their X handles)? Posts that tag them won't be suggested." `brand_handles` ships empty, and "none" is a fine answer. Never fill an answer from an example or from anyone else's setup. If the owner says "you pick", offer two or three choices with a short reason each.
 
 ## Rerun Picker notes
-`pull --tally-night` skips for $0 unless it is Sunday or the last pull is 6 or more days old. A same-day self-quote does not start the rerun cooldown. `max_per_tool` (default 2, 0 turns it off) is a soft cap per tool or series. `media-list` lists videos left after rejects and downloads nothing before the build. `nudge` writes one line when a review is `stale_review_days` old (default 3) and no rejects are synced. It never builds.
+`pull --tally-night` skips for $0 unless it is Sunday or the last pull is 6 or more days old. A same-day self-quote does not start the rerun cooldown. `max_per_tool` (default 2, 0 turns it off) is a soft cap per tool or series. `media-list` lists videos left after rejects and downloads nothing before the build. Setup installs a weekly "Stale review nudge" routine. It runs `nudge`, which writes one line when a review is `stale_review_days` old (default 3) and no rejects are synced. It never builds.
 
 A one-time backfill of post history costs about $0.001 per post. Show that before the first pull.
 

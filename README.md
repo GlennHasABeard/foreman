@@ -145,6 +145,7 @@ What's new in v1.2.1 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 - Shoutout deleted-account check stays off. Setup tells you it would be about $0.04 a month if you turn it on.
 - Rerun Picker setup installs the stale-review nudge routine. Video list stays empty until rejects exist.
 - Radar says how many new items arrived and how many cards show them.
+- Filter rows wrap on a narrow phone instead of clipping the last chip. The row is held to the page width.
 - The Game uses only the official embed widget.
 
 What's new in v1.2.0 (full notes in PATCH-NOTES.md and CHANGELOG.md):

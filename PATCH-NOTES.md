@@ -6,6 +6,9 @@ Install pins point at v1.2.1. Published v1.2.0 stays in place until this release
 
 - **Follow Finder Game.** Say "turn on Game" to create `creator-scout/game/LIVE`. Until then the tab is not published.
 - **Shoutout rollover lookup** stays off. Setup says that turning it on costs about $0.01 each weekly rollover, about $0.04 a month.
+
+## On by default
+
 - **Replies scorecard** is on by default in v1.2.1 and costs $0. It reads the content export already pulled. Setup installs the Sunday routine.
 
 ## Game embeds
@@ -22,6 +25,7 @@ The Daily Pack uses only X's official embed widget (`platform.twitter.com/widget
 - **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `nudge` installed at setup. `media-list` returns no videos until a reject list exists.
 - **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Replies scorecard on by default, $0.
 - **Reply Queue radar line.** The header keeps the new item count and adds the displayed card count.
+- **Narrow phones.** Filter rows wrap instead of clipping the last chip. The row is held to the page width. The same display rule is on every page that uses that row.
 
 A capped pull shows one line: "Capped pull: skipped … (cost cap $X reached)".
 

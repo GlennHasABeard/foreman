@@ -46,16 +46,16 @@ def read(rel):
 class V122Docs(unittest.TestCase):
     def test_pack_pin_uses_sums_file_not_a_self_hash(self):
         meta = json.loads(read("foreman/standalone.json"))
-        self.assertEqual(meta["version"], "v1.2.2")
+        self.assertEqual(meta["version"], "v1.2.3")
         fetch = read("foreman/fetch_release.sh")
-        self.assertIn('TAG="${1:-v1.2.2}"', fetch)
+        self.assertIn('TAG="${1:-v1.2.3}"', fetch)
         self.assertIn("sha256sum -c", fetch)
         # The published v1.2.1 digest stays on that release. It is not this zip's digest.
         for rel in ("README.md", "INSTALL_MESSAGE.txt", "foreman/instructions.md", "foreman/fetch_release.sh"):
             text = read(rel)
             self.assertNotIn("496973edd90168e48cba4798233dad7af0b3bb9513239e1188352ff290b352d7", text)
             self.assertIn("SHA256SUMS", text)
-            self.assertIn("v1.2.2", text)
+            self.assertIn("v1.2.3", text)
         readme = read("README.md")
         self.assertIn("does not claim those shares are accepted", readme)
         self.assertIn("stranger install", readme.lower())
@@ -67,7 +67,7 @@ class V122Docs(unittest.TestCase):
                 self.assertIn(phrase, text, rel)
             for phrase in SILENT:
                 self.assertNotIn(phrase, text, rel)
-            self.assertIn("/workspace/foreman/foreman/fetch_release.sh v1.2.2 --bot ", text)
+            self.assertIn("/workspace/foreman/foreman/fetch_release.sh v1.2.3 --bot ", text)
             self.assertNotIn("v1.2.1", text, rel)
         # Analytics has no X sign-in. The other six keep reuse and force consent.
         for rel in GUIDES:
@@ -78,7 +78,8 @@ class V122Docs(unittest.TestCase):
             self.assertIn("signin-check", text)
             self.assertIn("auth --force", text)
             self.assertIn("Reusing", text)
-            self.assertIn("You have about 30 seconds after you approve", text)
+            self.assertIn("Never ask for the callback address, the code, or a token in chat.", text)
+            self.assertIn("do not put a callback address, code, or token into a command", text)
 
     def test_named_routines_match_routine_json(self):
         pairs = {
@@ -150,7 +151,7 @@ class V122Docs(unittest.TestCase):
             "ledger before the next",
             "ask before replacing it",
             "costcheck.py",
-            "30 seconds after you approve",
+            "Never ask for the callback address, the code, or a token in chat.",
             "auth --force",
         ):
             self.assertIn(phrase, text)
@@ -176,6 +177,7 @@ class V122Docs(unittest.TestCase):
 
     def test_changelog_does_not_claim_share_acceptance(self):
         log = read("CHANGELOG.md")
+        self.assertIn("## v1.2.3", log)
         self.assertIn("## v1.2.2", log)
         self.assertIn("does not say share acceptance is done", log)
         self.assertNotIn("stranger install passed", log.lower())

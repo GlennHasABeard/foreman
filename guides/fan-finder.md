@@ -1,6 +1,6 @@
 # Fan Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh /workspace/foreman/foreman/fetch_release.sh v1.2.2 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists. If `/workspace/foreman` already exists, ask before replacing it.
+Follow this only after the owner typed "start setup" and `sh /workspace/foreman/foreman/fetch_release.sh v1.2.3 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists. If `/workspace/foreman` already exists, ask before replacing it.
 
 ## Rules (always)
 
@@ -32,9 +32,9 @@ Run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py individu
 All individual bots on this Grok Bot computer share one sign-in at `/workspace/x-signin/x_signin.json` (owner-only, renewed under a lock). If a Foreman crew is here, they use its `dispatch/x_signin.json` instead. Each bot keeps its own ledger and cap.
 First run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py signin-check`. If it says "Reusing", the sign-in is done: it made one account read (GET /users/me, $0.010, booked to this bot's ledger). Never sign in again. If it says no sign-in was found, this is the first bot: do steps 1 to 4.
 1. Ask the owner to add `X_CLIENT_ID` and `X_CLIENT_SECRET` as stored secrets. Never in chat.
-2. Before you send or open the link, say: "You have about 30 seconds after you approve. If the page after Authorize does not load, copy the full address from the address bar and paste it here right away, before doing anything else."
+2. Before you send or open the link, tell the owner the sign-in finishes in this bot's own browser. If it does not, stop. Never ask for the callback address, the code, or a token in chat.
 3. Start `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py auth --likes` in the background. Open the address it prints in the bot's own browser. The owner clicks Authorize and it finishes by itself.
-4. If the page does not load, the moment they paste the address run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py auth-paste '<address>'`. If X says the code expired, say so, start auth again, repeat the 30 second warning and send a new link.
+4. If the page after Authorize does not finish the sign-in, stop. Do not ask the owner to copy the address bar, and do not put a callback address, code, or token into a command, a log, or this chat. If the script prints a backup that asks for that address, do not use it. The owner approves again in this bot's own browser, or finishes on the sign-in screen or terminal the script already opened. If X says the code expired, start auth again and send a new link. Do not ask them to send the old address.
 5. One X app covers every bot on this Grok Bot. Signing in with the same app on a second Grok Bot or another computer logs this one out. Do not run `auth --force` unless the owner says yes. That command logs the other bots on this X app out.
 
 ## Self-check

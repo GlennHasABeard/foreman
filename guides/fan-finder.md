@@ -1,6 +1,17 @@
 # Fan Finder alone: setup guide
 
-Follow this only after the owner typed "start setup" and `sh fetch_release.sh v1.2.1 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists.
+Follow this only after the owner typed "start setup" and `sh /workspace/foreman/foreman/fetch_release.sh v1.2.2 --bot fan-finder` said the checksum is OK. Stop if `/workspace/foreman/.template-master` exists. If `/workspace/foreman` already exists, ask before replacing it.
+
+## Rules (always)
+
+1. Read only on X: never post, reply, like, follow, unfollow, DM, block or mute. Stay out of X Chat.
+2. Never go over the daily spend cap. Book every request in the ledger before the next. If the cap stops a run, say what was not read.
+3. Secrets only in stored secrets. Never ask for, print or write a key, token or password in chat or files.
+4. Flag anything missing or failed. Never report a fake 0 or empty list for something not read.
+5. Never overwrite raw files or pulls; new runs write new dated files.
+
+No memory, routines or secrets until setup is finished.
+
 
 ## Install
 Copy `follow-audit/follow_watch.py`, `x_prices.py`, `bot_spend.py` and `weekly_rollup.py` into `$BOTS_HOME/follow-watch` and `reply-queue/engagement.py` plus `qol_leads.py` into `$BOTS_HOME/engagement` (the same scripts Reply Queue uses). Scripts only, never a sign-in or token file.
@@ -15,7 +26,7 @@ If Reply Queue is installed, Fan Finder reuses its pull for $0. If not, it makes
 
 ## Cap and ledger
 Run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py individual`. It marks this bot as set up from its individual template, so it keeps its own cap and ledger even if a Foreman crew lives in this `$BOTS_HOME`, and prints the mode.
-- standalone (expected): ask the owner for this bot's daily spend cap and timezone and save them as `daily_spend_cap` and `timezone` in `$BOTS_HOME/engagement/config.json`. The bot keeps its own ledger. For a one-day raise, repeat the amount and date, wait for yes, then run `bot_spend.py raise <amount> --yes`. It ends at midnight by itself.
+- standalone (expected): ask the owner for this bot's daily spend cap and timezone and save them as `daily_spend_cap` and `timezone` in `$BOTS_HOME/engagement/config.json`. The bot keeps its own ledger. For a one-day raise, repeat the amount and date, wait for yes, then run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py raise <amount> --yes`. It ends at midnight by itself.
 
 ## Sign in to X
 All individual bots on this Grok Bot computer share one sign-in at `/workspace/x-signin/x_signin.json` (owner-only, renewed under a lock). If a Foreman crew is here, they use its `dispatch/x_signin.json` instead. Each bot keeps its own ledger and cap.
@@ -24,20 +35,27 @@ First run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py
 2. Before you send or open the link, say: "You have about 30 seconds after you approve. If the page after Authorize does not load, copy the full address from the address bar and paste it here right away, before doing anything else."
 3. Start `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py auth --likes` in the background. Open the address it prints in the bot's own browser. The owner clicks Authorize and it finishes by itself.
 4. If the page does not load, the moment they paste the address run `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/follow_watch.py auth-paste '<address>'`. If X says the code expired, say so, start auth again, repeat the 30 second warning and send a new link.
-5. One X app covers every bot on this Grok Bot. Signing in with the same app on a second Grok Bot or another computer logs this one out.
+5. One X app covers every bot on this Grok Bot. Signing in with the same app on a second Grok Bot or another computer logs this one out. Do not run `auth --force` unless the owner says yes. That command logs the other bots on this X app out.
 
 ## Self-check
-Run one free check: `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py mode`, then `python3 engagement.py --help` (no X reads). Report anything FLAGGED. Never report a 0 for something that was not read.
+Run one free check: `CREW_BOT="Fan Finder" python3 $BOTS_HOME/follow-watch/bot_spend.py mode`, then `python3 $BOTS_HOME/engagement/engagement.py --help` (no X reads). Report anything FLAGGED. Never report a 0 for something that was not read.
+
+## Routines
+
+Offer each routine below. Say what it is for and what it costs. Create it only after the owner says yes to that routine. Never create a routine they did not accept.
+
+- Fan list. $0 when it reuses a Reply Queue pull. If it must pull on its own, about $0.25 to $1.07, the same range as one Reply Queue run. Say which one applies before the owner answers.
+- Update check. Once a day, `python3 /workspace/foreman/foreman/update_check.py check`. $0. It does not download a release.
 
 ## Introduce yourself
-Two or three lines: what you do, when you run (only if the owner asked for a schedule), what a run costs, and how to ask you things. Create a routine only if the owner asks for one.
+Two or three lines: what you do, when you run (only the routines the owner accepted), what a run costs, and how to ask you things.
 
 ## Updates
 
-Once a day, the first time it works that day, the bot checks GitHub (free, no X reads) for a newer Foreman release. If there is one, it shows you the release notes and asks first. It never downloads or updates anything without your yes, and it checks every download against SHA256SUMS before using it.
+Before any version change, run `python3 /workspace/foreman/foreman/update_check.py check`. It reads GitHub's public release list, costs $0, and does not touch X. If it prints UPDATE AVAILABLE, show the owner the version and the release notes, then ask. Do not download yet. Only after the owner says yes to that exact version, run `python3 /workspace/foreman/foreman/update_check.py fetch <tag> --yes`. That downloads the zip and SHA256SUMS and checks one against the other. If it says STOP, tell the owner and stop. A no, or no answer, means stay on this version. Never download from main. The zip does not carry its own digest. The check uses the SHA256SUMS file published beside that release.
 
 ## New in v1.1
-`foreman/v11.py` stays in `/workspace/foreman/foreman` (like `update_check.py`). Never copy it elsewhere.
+`foreman/v11.py` and `foreman/v11_wire.py` stay in `/workspace/foreman/foreman` (like `update_check.py`). Never copy them elsewhere. `python3 /workspace/foreman/foreman/v11_wire.py` rebuilds a bot's saved panel and does not call the X API.
 - If your lists are hosted, marks you make on the page (never show, show again, done, stages, notes, follow-ups) are pulled into the bot before every run, so the page and chat always agree. The newest mark wins, and two devices saving at once keep both. The previous full report stays linked at the bottom of each page.
 - No hosting needed: every saved mark works by chat and lives in this bot's own files.
   - `note @name ...` saves a note
@@ -46,7 +64,7 @@ Once a day, the first time it works that day, the bot checks GitHub (free, no X 
   - `never show @name` and `show @name again` (hidden leads show "back in N days")
   - `@name is new|engaged|talked|done` sets the stage
 - One hosted bot: its own page is its home, and follow-ups show there.
-- Billing: say the one-time billed-check line from `v11.py billing-setup-note` during setup. Until console.x.com is signed in in the bot's browser, spend shows as labeled estimates.
+- Billing: say the one-time billed-check line from `python3 /workspace/foreman/foreman/v11.py billing-setup-note` during setup. Until console.x.com is signed in in the bot's browser, spend shows as labeled estimates.
 
 What this bot got in v1.1:
 - Reuses Reply Queue's pull when installed and under 12 hours old ("Pull from Reply Queue, Nh ago, $0 extra"). Otherwise it does its own pull and shows the pull age and cost line.

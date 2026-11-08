@@ -26,7 +26,7 @@ Script: `$BOTS_HOME/x-analytics/x_analytics.py`. Uses the browser on the X analy
 1. `CREW_BOT="Analytics Log" python3 x_analytics.py start night` makes a new dated folder and prints a checklist.
 2. Follow the checklist: download each export and note each panel value into the folder.
 3. `CREW_BOT="Analytics Log" python3 x_analytics.py seal` parses the pull and updates the records. The manifest key is still `finished`. There is no `finish` alias.
-4. `python3 x_analytics.py scorecard` is the weekly replies scorecard. It is on by default and costs $0, because it reads the content export already pulled. Setup installs the Sunday routine from `routine.json`. Set `replies_scorecard.enabled` to false only if the owner asks.
+4. `python3 $BOTS_HOME/x-analytics/x_analytics.py scorecard` is the weekly replies scorecard. It is on by default and costs $0, because it reads the content export already pulled. Offer the Sunday routine from `routine.json`, say it costs $0, and create it only after the owner says yes. Set `replies_scorecard.enabled` to false only if the owner asks.
 4. Premium and monetization panels: if the owner's config says the account does not have them, they are marked "not available on this account". That is not a failure.
 5. If the owner is signed out or a download fails, flag it. Never type the owner's password. Ask them to sign in on the desktop.
 

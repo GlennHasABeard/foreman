@@ -1,6 +1,16 @@
-# Foreman v1.2.1 patch notes
+# Foreman v1.2.2 patch notes
 
-Install pins point at v1.2.1. Published v1.2.0 stays in place until this release is tagged. Its release note then is: superseded by v1.2.1, install that instead.
+Docs only. Install pins point at v1.2.2 and check the `SHA256SUMS` file published beside the zip. The zip does not contain its own digest. Published v1.2.1 stays in place. This file does not say a share was accepted. A stranger install of v1.2.2 has not been recorded here.
+
+- Every routine is offered with its purpose and cost and created only after the owner says yes. That includes the Sunday replies scorecard and the stale-review nudge.
+- The replies scorecard setting stays on by default and still costs $0. The Sunday routine is separate from that setting.
+- The seven guides carry the read-only, secret, ledger, cap-stop, no-fake-zero and raw-file rules from the full profiles.
+- A version change runs `update_check.py check` first and `update_check.py fetch <tag> --yes` only after a yes.
+- Foreman installs the `standalone.json` file set, including `v11_wire.py`, and hands Dispatch the Game, shoutout-goal and cap-raise commands.
+
+## Previous release, v1.2.1
+
+Install pins for that release pointed at v1.2.1. Published v1.2.0 stayed in place. Its release note is: superseded by v1.2.1, install that instead. v1.2.2 does not replace the v1.2.1 tag or zip.
 
 ## Off until you turn them on
 
@@ -9,7 +19,7 @@ Install pins point at v1.2.1. Published v1.2.0 stays in place until this release
 
 ## On by default
 
-- **Replies scorecard** is on by default in v1.2.1 and costs $0. It reads the content export already pulled. Setup installs the Sunday routine.
+- **Replies scorecard** is on by default in v1.2.1 and costs $0. It reads the content export already pulled. v1.2.2 still leaves that setting on. The Sunday routine is offered and created only after the owner says yes.
 
 ## Game embeds
 
@@ -22,7 +32,7 @@ The Daily Pack uses only X's official embed widget (`platform.twitter.com/widget
 - **Shoutout Picker.** Flagged mutuals left out or ranked last. Fresh rollovers keep last week's verdict. Week N on every pick. One extra band of 20 when the list is short. `catch-up` reads saved posts only.
 - **Reply Queue.** One row per account, questions first, 24-hour mute in the browser, new chip, low-value fold, thread cards. Done marks save `{done: 1, at: time}`. Pulls read your own likes, mark items you already liked, and write a coverage block. A cap stop leads with the capped-pull line. Trial caps are generic (`apply_trial`, `log_trial`).
 - **Fan Finder.** "N people still engaging who don't follow you yet (±D vs last week)". Backlog leads expire after 30 days. Every qualified lead is tracked in `leads_seen.json`. Stored likes still count when new like pulls are off.
-- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool, `nudge` installed at setup. `media-list` returns no videos until a reject list exists.
+- **Rerun Picker.** Sunday or 6-day tally pull, same-day quotes do not cool down, 2 picks per tool. The stale-review nudge is offered at setup and created only after the owner says yes. `media-list` returns no videos until a reject list exists.
 - **Analytics Log.** `seal` instead of `finish` (manifest key `finished` unchanged). Tracker upsert by date. 500K leave-window card. Replies scorecard on by default, $0.
 - **Reply Queue radar line.** The header keeps the new item count and adds the displayed card count.
 - **Narrow phones.** Filter rows wrap instead of clipping the last chip. The row is held to the page width. The same display rule is on every page that uses that row.

@@ -2,15 +2,26 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
+## v1.2.2 (2026-11-08)
+
+Docs patch on the published v1.2.1 tree. No bot default, page, or script behavior change. Published v1.2.1, tag and zip, stay as released. Share cards are not part of this pack. A stranger install has not been run for this version, so this file does not say share acceptance is done.
+
+- Pack version in `foreman/standalone.json` is v1.2.2. Install text names tag v1.2.2 and checks `SHA256SUMS` from that release. The zip does not contain its own digest.
+- The seven guides state the read-only limits, including staying out of X Chat, the secret rule, booking a paid request before the next one, saying what a cap stop did not read, no fake zero, and not overwriting raw files. They also say the bot has no memory, routines or secrets until setup is finished.
+- Every routine is offered with its purpose and cost. Analytics Log's Sunday scorecard and Rerun Picker's stale-review nudge are included. A routine is created only after the owner says yes to that routine.
+- Before a version change, the guides say to run `python3 /workspace/foreman/foreman/update_check.py check`, and to run `update_check.py fetch <tag> --yes` only after the owner agrees. A failed checksum stops the download.
+- Foreman installs the file set named in `standalone.json`, including `foreman/v11_wire.py` and Follow Finder's `game/` files, and tells Dispatch the Game chat commands, `shoutout goal N`, and the one-day cap raise that repeats the amount and date and waits for yes.
+- Replies scorecard stays on by default at $0. That is a setting. It is not a routine created without a yes.
+
 ## v1.2.1 (2026-11-07)
 
 Install pins point at v1.2.1. Published v1.2.0 stays available. Its release note, when this tag is published, is: superseded by v1.2.1, install that instead.
 
 - Pack version in `foreman/standalone.json` is v1.2.1.
-- Replies scorecard is on by default and costs $0. Setup installs the Sunday routine.
+- Replies scorecard is on by default and costs $0. The v1.2.1 guide told setup to install the Sunday routine. v1.2.2 offers that routine and creates it only after a yes.
 - Language floor stays off until setup. Setup asks which languages to favor and what minimum share each one gets. No language is filled in for the owner.
 - Rollover account check stays off. Setup states the monthly cost, about $0.04 if it runs every week.
-- Rerun Picker setup installs the stale-review nudge routine. It is not a manual note only.
+- The v1.2.1 guide installed Rerun Picker's stale-review nudge at setup. v1.2.2 offers it, with its purpose and its $0 cost, and creates it only after a yes. It is not a manual note only.
 - `media-list` returns no videos until a reject list exists. An empty list is not a reject list.
 - The Game uses only the official embed widget. The unofficial embed path is not in this pack.
 - Radar header keeps the new item count and adds the card count, for example "5 new items in 2 cards."

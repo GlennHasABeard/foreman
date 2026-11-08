@@ -1,12 +1,13 @@
 Hi Grok Bot. Please set up a new bot called Foreman from this package.
 
-1. Download the Foreman release v1.2.1 and check it before unzipping. Run these on the box:
-   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v1.2.1/foreman-v1.2.1.zip
-   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v1.2.1/SHA256SUMS
+1. If /workspace/foreman already exists, ask before replacing it. Download the Foreman release v1.2.2 and check it before unzipping. Run these on the box:
+   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v1.2.2/foreman-v1.2.2.zip
+   curl -fsSLO https://github.com/GlennHasABeard/foreman/releases/download/v1.2.2/SHA256SUMS
    sha256sum -c SHA256SUMS
-   If the check does not say OK, stop and tell me. Do not unzip it. If it says OK, unzip it so the files land in /workspace/foreman.
-   Always use the v1.2.1 release. Never download from main.
+   If the check does not say OK, stop and tell me. Do not unzip it. If it says OK, unzip it so the files land in /workspace/foreman. Unzip from /workspace, not from inside /workspace/foreman.
+   SHA256SUMS is the file published next to the zip. The zip does not contain its own digest.
+   Always use the v1.2.2 release. Never download from main.
 2. Create a bot named Foreman. Use foreman/foreman/instructions.md as its instructions.
-3. Start Foreman and let it walk me through setup.
+3. Start Foreman and let it walk me through setup. Do not create routines until I say yes to each one.
 
-Ground rules: everything is read only on X. Never post, reply, like, follow, unfollow, DM, block or mute. Never ask me for a key, token or password in chat. Use stored secrets only. Stay under the daily spend cap I choose.
+Ground rules: everything is read only on X. Never post, reply, like, follow, unfollow, repost, DM, block, mute or edit lists, and stay out of X Chat. Never ask me for a key, token or password in chat. Use stored secrets only. Stay under the daily spend cap I choose. Book every paid request before the next one. Never show a 0 that is not real.

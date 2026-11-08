@@ -1,6 +1,6 @@
 # Changes for the next release
 
-v1.2.0 prep ports the items below into the template pack. v1.2.1 is the correction pin. The v1.2.0 release stays published until v1.2.1 is tagged.
+v1.2.1 is published. v1.2.2 is a docs patch on that tree and does not change the defaults below. The v1.2.0 release stays published. Share acceptance is not claimed here.
 
 ## Shipped in this prep
 

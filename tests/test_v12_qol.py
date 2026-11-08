@@ -336,7 +336,7 @@ class Defaults(unittest.TestCase):
 
     def test_pack_version(self):
         meta = json.load(open(os.path.join(ROOT, "foreman", "standalone.json"), encoding="utf-8"))
-        self.assertEqual(meta["version"], "v1.2.1")
+        self.assertEqual(meta["version"], "v1.2.2")
 
     def test_capped_line(self):
         self.assertEqual(v11.capped_pull("mentions", 1), "Capped pull: skipped mentions (cost cap $1.00 reached)")

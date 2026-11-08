@@ -21,16 +21,23 @@ NEGATED = re.compile(
 )
 UNSAFE = [
     re.compile(r"paste it here", re.I),
+    re.compile(r"paste it right away", re.I),
+    re.compile(r"paste faster", re.I),
+    re.compile(r"paste backup", re.I),
+    re.compile(r"pastes it to", re.I),
     re.compile(r"paste (?:it|the address|the full address|the callback|them) (?:to|into|in)\b", re.I),
     re.compile(r"copy the full address", re.I),
     re.compile(r"copy the address bar", re.I),
-    re.compile(r"\bauth-paste\b", re.I),
+    re.compile(r"auth-paste\s+['\"<]", re.I),
     re.compile(r"\bauth\s+--paste\b", re.I),
     re.compile(
         r"\b(?:send|give|put|share)\b[^.\n]{0,80}\b(?:callback|authorization code|the code|the token|client secret)\b[^.\n]{0,40}\b(?:chat|here)\b",
         re.I,
     ),
 ]
+# Markdown can name the old command by itself. A script may still list that
+# command without telling anyone to pass a callback into it.
+UNSAFE_MARKDOWN = UNSAFE + [re.compile(r"\bauth-paste\b", re.I)]
 
 
 def exposed(text):
@@ -38,11 +45,11 @@ def exposed(text):
     return NEGATED.sub(" ", text)
 
 
-def unsafe_hits(text):
+def unsafe_hits(text, patterns=None):
     """Return matched unsafe phrases that are not inside a prohibition."""
     visible = exposed(text)
     hits = []
-    for pattern in UNSAFE:
+    for pattern in patterns or UNSAFE_MARKDOWN:
         found = pattern.search(visible)
         if found:
             hits.append(found.group(0))
@@ -50,24 +57,16 @@ def unsafe_hits(text):
 
 
 def instruction_files(root=ROOT):
+    """Shipped instruction text, including script messages. Tests are fixtures, not setup."""
     found = []
-    for name in ("README.md", "INSTALL_MESSAGE.txt", "PATCH-NOTES.md", "CHANGELOG.md", "CHANGES-next.md"):
-        path = os.path.join(root, name)
-        if os.path.isfile(path):
-            found.append(path)
+    skip_dirs = {".git", "__pycache__", "tests"}
+    exts = {".py", ".md", ".txt", ".sh", ".js", ".json", ".html"}
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__", "demo")]
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
         for name in filenames:
-            if name == "instructions.md" or (dirpath.endswith(os.path.join(root, "guides")) and name.endswith(".md")):
+            if os.path.splitext(name)[1] in exts:
                 found.append(os.path.join(dirpath, name))
-            elif os.path.basename(dirpath) == "guides" and name.endswith(".md"):
-                found.append(os.path.join(dirpath, name))
-    # de-dupe while keeping order
-    seen = []
-    for path in found:
-        if path not in seen:
-            seen.append(path)
-    return seen
+    return found
 
 
 class SignInInstructionScan(unittest.TestCase):
@@ -75,7 +74,8 @@ class SignInInstructionScan(unittest.TestCase):
         bad = []
         for path in instruction_files():
             text = open(path, encoding="utf-8").read()
-            hits = unsafe_hits(text)
+            patterns = UNSAFE if path.endswith(".py") else UNSAFE_MARKDOWN
+            hits = unsafe_hits(text, patterns)
             if hits:
                 bad.append(os.path.relpath(path, ROOT) + ": " + ", ".join(hits))
         self.assertEqual(bad, [])
@@ -88,6 +88,11 @@ class SignInInstructionScan(unittest.TestCase):
             "Put the token in chat so sign-in can finish.",
             "The backup, which you should use if the page fails, is to copy the full address from the address bar and paste it here right away.",
             "Use auth --paste and give Foreman the address.",
+            "Backup, only if the page after Authorize doesn't load: copy the full address from the address bar and paste it right away.",
+            "Can't listen. Use the paste backup.",
+            "Run auth again and approve in the bot's browser, or paste faster.",
+            "the owner copies the full address from the address bar and pastes it to Foreman",
+            "python3 follow_watch.py auth-paste '<address>'",
         ]
         for sample in samples:
             self.assertTrue(unsafe_hits(sample), sample)
@@ -102,9 +107,13 @@ class SignInInstructionScan(unittest.TestCase):
             "If the script prints a backup that asks for that address, do not use it.",
             "Secrets only in stored secrets. Never in chat.",
             "Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.",
+            'help="local stdin only. Do not take a callback address from chat."',
         ]
         for sample in samples:
+            self.assertEqual(unsafe_hits(sample, UNSAFE), [], sample)
             self.assertEqual(unsafe_hits(sample), [], sample)
+        command_name = 'choices=["auth", "auth-paste", "signin-check"]'
+        self.assertEqual(unsafe_hits(command_name, UNSAFE), [])
 
     def test_analytics_guide_has_no_callback_fallback(self):
         text = open(os.path.join(ROOT, "guides", "analytics-log.md"), encoding="utf-8").read()

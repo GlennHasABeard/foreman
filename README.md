@@ -69,9 +69,9 @@ The scripts read these two names from the environment and never write them to a 
 
 Main path. Foreman opens an X page in Grok Bot's own browser. You click Authorize there. X sends that browser back to `http://127.0.0.1:8765/callback` on Grok Bot's computer, where the script is already listening, and the sign in finishes by itself. Nothing to copy.
 
-Backup, only if that page cannot load, for example when you approve on your phone. Before Foreman sends the link it tells you: you have about 30 seconds after you approve. Get ready first. Click Authorize, copy the full address from the address bar of the page that will not load, and paste it to Foreman at once. Do not stop to read the page. Foreman hands it straight to the waiting script (`follow_watch.py auth-paste`), which swaps it for the sign in the moment it arrives. In our own test the first paste came too late and the second one worked.
+If that page does not finish the sign-in, stop. Do not copy the address bar, and do not send the callback address, the code, or a token in chat. Do not hand that address to a command or a log. Approve again in Grok Bot's own browser. If X says the code expired, ask for a new link and approve there again.
 
-If X says the code expired, nothing is broken. Ask Foreman for a new link and try again, a little faster. The code only works for this sign in. It is not your password or a secret. The sign in asks for these read scopes only: tweet.read, users.read, follows.read and offline.access, plus like.read if you pick Reply Queue or Fan Finder.
+The sign in asks for these read scopes only: tweet.read, users.read, follows.read and offline.access, plus like.read if you pick Reply Queue or Fan Finder.
 
 One sign in, shared. The sign in is saved once, in Dispatch's folder (`dispatch/x_signin.json`, readable only by its owner), and every bot uses that one file. No bot keeps its own copy and nothing ever copies it. When it needs renewing, one bot renews it under a lock while the others wait and then read the new one. If a renewal fails, the bot stops and says "X sign-in needs to be redone", and Foreman runs the sign in again.
 
@@ -92,7 +92,7 @@ If hosting is on, Foreman also asks for `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_A
 Get the Foreman template: [Foreman](https://x.ai/bot/Hfm0xbUx8FqPTd5EYvjat)
 
 1. Set up your X developer app as above.
-2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.2.2` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.2.2, checks the zip with `sha256sum -c SHA256SUMS`, and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. `SHA256SUMS` is published beside the zip. The zip cannot contain its own digest, because that digest is of the zip bytes. After the release is published, share text can repeat the digest from `SHA256SUMS`. This pack does not claim those shares are accepted. You can also run `sh foreman/fetch_release.sh v1.2.2` once that script is unpacked. If `/workspace/foreman` already exists, ask before replacing it. Unzip from `/workspace`, not from inside `/workspace/foreman`.
+2. Give Grok Bot the message in `INSTALL_MESSAGE.txt`. It downloads the pinned release `v1.2.3` and its `SHA256SUMS` file from https://github.com/GlennHasABeard/foreman/releases/tag/v1.2.3, checks the zip with `sha256sum -c SHA256SUMS`, and only then unzips it into `/workspace/foreman`. If the check fails, it stops. It never downloads from main. `SHA256SUMS` is published beside the zip. The zip cannot contain its own digest, because that digest is of the zip bytes. After the release is published, share text can repeat the digest from `SHA256SUMS`. This pack does not claim those shares are accepted. You can also run `sh foreman/fetch_release.sh v1.2.3` once that script is unpacked. If `/workspace/foreman` already exists, ask before replacing it. Unzip from `/workspace`, not from inside `/workspace/foreman`.
 3. Foreman asks for your secrets through the stored secret request, asks only the questions your bots need and sets everything up.
 4. Foreman checks the cost of every day of the week against your cap. Setup does not finish until every day fits.
 5. Each bot runs a self check and introduces itself. Foreman ends with a crew summary.
@@ -129,7 +129,7 @@ Each of the seven bots is also its own template. Open the bot's template link be
 - [Rerun Picker](https://x.ai/bot/M2jbahUCQCsNqdgGxAIj2)
 - [Analytics Log](https://x.ai/bot/TuAu34Lz2_zupuT5qlai3)
 
-The bot waits until you type "start setup" and does nothing before that. Then it runs `sh /workspace/foreman/foreman/fetch_release.sh v1.2.2 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a setup guide in `guides/<slug>.md`. That guide is the setup the bot follows. A share description is not accepted until a stranger install is checked, and this release does not record that check.
+The bot waits until you type "start setup" and does nothing before that. Then it runs `sh /workspace/foreman/foreman/fetch_release.sh v1.2.3 --bot <slug>`, which downloads the pinned release and SHA256SUMS, checks them and unzips only that bot's files into `/workspace/foreman`. The list of files per bot is in `foreman/standalone.json`. Each bot has a setup guide in `guides/<slug>.md`. That guide is the setup the bot follows. A share description is not accepted until a stranger install is checked, and this release does not record that check.
 
 What's new in v1.1 for individual templates (each template's release notes list only what it got, see PATCH-NOTES.md):
 
@@ -137,6 +137,16 @@ What's new in v1.1 for individual templates (each template's release notes list 
 - One hosted bot: its own page is its home. Follow-ups and status show there. Two or more hosted: Home shows panels only for the bots installed.
 - Spend: each template keeps its own cap, month forecast and weekly cost digest. Estimate next to what X billed needs console.x.com signed in in the bot's browser. Without it, spend shows as labeled estimates and setup says once how to turn on the billed check.
 - Shared: update notice, attached profiles at $0, refused reads say so (never a quiet 0), sign-in check after a box restore, shared publish cache with OK/failed log, short chat reports with the page link, light and dark pages with real buttons and Last updated, a shared profile cache when more than one bot is here, and suggested run times 20 minutes apart.
+
+What's new in v1.2.3 (full notes in PATCH-NOTES.md and CHANGELOG.md):
+
+## Sign-in safety fix
+
+Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.
+
+- Docs only. Prices, caps, the ledger, and the automatic browser sign-in stay as in v1.2.2. Published v1.2.2 stays available and is not replaced.
+- If the browser callback does not finish, setup stops. It does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log. Analytics Log's own guide is the v1.2.2 text.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
 
 What's new in v1.2.2 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 

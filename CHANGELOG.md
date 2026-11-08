@@ -2,6 +2,20 @@
 
 All Foreman releases. Each template has its own section, plus "All individual templates" for changes every bot gets.
 
+## v1.2.3 (2026-11-08)
+
+Docs only. No bot default, page, price, cap, ledger, or script behavior change. Published v1.2.1 and v1.2.2 stay as released. Share cards are not part of this pack. A stranger install has not been run for this version.
+
+### Sign-in safety fix
+
+Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.
+
+- Pack version in `foreman/standalone.json` is v1.2.3. Install text names tag v1.2.3 and checks `SHA256SUMS` from that release. The zip does not contain its own digest.
+- The automatic browser sign-in is unchanged. X still returns the browser to the local callback, and the waiting script finishes the sign-in there.
+- If that callback does not finish, setup stops. The guides and Foreman instructions no longer ask the owner to copy the address bar into chat, and they no longer tell the bot to pass that address to `auth-paste`. The owner approves again in the bot's own browser, or finishes on the sign-in screen or terminal the script already opened.
+- Analytics Log's guide is unchanged from published v1.2.2, including its v1.2.2 install pin. It had no callback-paste step. The pack version in `standalone.json` is v1.2.3.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
+
 ## v1.2.2 (2026-11-08)
 
 Docs patch on the published v1.2.1 tree. No bot default, page, or script behavior change. Published v1.2.1, tag and zip, stay as released. Share cards are not part of this pack. A stranger install has not been run for this version, so this file does not say share acceptance is done.

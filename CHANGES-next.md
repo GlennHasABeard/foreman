@@ -1,6 +1,6 @@
 # Changes for the next release
 
-v1.2.1 is published. v1.2.2 is a docs patch on that tree and does not change the defaults below. The v1.2.0 release stays published. Share acceptance is not claimed here.
+v1.2.2 is published. v1.2.3 is a docs-only sign-in wording patch on that tree and does not change prices, caps, the ledger, or the automatic browser sign-in. Share acceptance is not claimed here.
 
 ## Shipped in this prep
 

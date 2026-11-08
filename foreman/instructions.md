@@ -16,13 +16,13 @@ Catalog: `foreman/bots.json` lists every bot, what it does, its questions and ro
 
 ## First run: get the package
 
-Before step 1, make sure `/workspace/foreman` came from the pinned release. If `/workspace/foreman` already exists, ask before replacing it. If it is missing or you are not sure, download it by hand as below. When `fetch_release.sh` is already unpacked, `sh /workspace/foreman/foreman/fetch_release.sh v1.2.2` does the same check and unzip:
-1. Download `foreman-v1.2.2.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v1.2.2/foreman-v1.2.2.zip
+Before step 1, make sure `/workspace/foreman` came from the pinned release. If `/workspace/foreman` already exists, ask before replacing it. If it is missing or you are not sure, download it by hand as below. When `fetch_release.sh` is already unpacked, `sh /workspace/foreman/foreman/fetch_release.sh v1.2.3` does the same check and unzip:
+1. Download `foreman-v1.2.3.zip` from https://github.com/GlennHasABeard/foreman/releases/download/v1.2.3/foreman-v1.2.3.zip
 2. Download `SHA256SUMS` from the same release. That file is published beside the zip. The zip does not carry its own digest, because the digest covers the zip bytes.
 3. Run `sha256sum -c SHA256SUMS`.
 4. If it does not say OK, STOP. Do not unzip. Tell the owner the download failed its check.
 5. Only after OK, unzip so the files land in `/workspace/foreman`. Extract under `/workspace`, not under `/workspace/foreman`, or the package nests twice.
-Always use the tag v1.2.2. Never download from main. Run `python3 /workspace/foreman/foreman/update_check.py check` before any version change and follow what it prints. Never download a different version without the owner's yes.
+Always use the tag v1.2.3. Never download from main. Run `python3 /workspace/foreman/foreman/update_check.py check` before any version change and follow what it prints. Never download a different version without the owner's yes.
 
 Individual templates can live alongside the crew. They keep their own ledger and cap and do not join the crew, but they reuse the crew's one X sign-in. If the owner already set up individual templates, the shared sign-in at `/workspace/x-signin/x_signin.json` already exists: do not sign in again with the same X app; say so and ask the owner before running `auth --force`, which would log those bots out.
 
@@ -57,8 +57,8 @@ Full scans. A Follow Audit full scan costs about $0.65 to $1.00 per 1,000 follow
 ### 4. Secrets
 Request through the stored secret request (never in chat): `X_CLIENT_ID`, `X_CLIENT_SECRET`. If hosting: `CLOUDFLARE_API_TOKEN` (Pages edit, KV edit, Access edit) and `CLOUDFLARE_ACCOUNT_ID`. Explain where to find each in one line. Each crew uses its own X app and one shared sign-in. A second sign-in to the same X app cancels the first, so never sign a test crew in to the owner's live app. A test crew needs its own X app. Then run the one time read only sign in, once for the whole crew. The shared client is already in the unpacked package, so this step does not wait for the copy in step 5: `CREW_BOT="Foreman" python3 /workspace/foreman/follow-audit/follow_watch.py auth` (scopes tweet.read, users.read, follows.read, offline.access). It still saves the sign-in under `$BOTS_HOME`. If Reply Queue or Fan Finder is chosen, add `--likes`, which adds like.read, so it is still one sign-in. No write scopes are ever requested. Start it in the background and keep it running; it waits up to 10 minutes.
 - Main path: open the address it prints in your own browser (the bot's browser on this computer), have the owner sign in to X there if asked and click Authorize. X sends that browser back to `http://127.0.0.1:8765/callback`, where the script is listening, and the sign-in finishes by itself.
-- Before you send or open the link, always tell the owner: "You have about 30 seconds after you approve. If the page after Authorize does not load, copy the full address from the address bar and paste it here right away, before doing anything else."
-- Backup, only if that page does not load (for example on a phone): the moment they paste it, run `CREW_BOT="Foreman" python3 /workspace/foreman/follow-audit/follow_watch.py auth-paste '<address>'`. The waiting script swaps the code for the sign-in at once. Do nothing else in between. If X says the code expired, nothing is broken: say "That code expired. I'm sending a new link, have the copy ready.", start auth again, repeat the 30 second warning and send the new link.
+- Before you open the link, tell the owner the sign-in finishes in this bot's own browser. If it does not, stop. Never ask for the callback address, the code, or a token in chat.
+- If the page after Authorize does not finish the sign-in, stop. Do not ask the owner to copy the address bar, and do not put a callback address, code, or token into a command, a log, or this chat. If the script prints a backup that asks for that address, do not use it. The owner approves again in this bot's own browser, or finishes on the sign-in screen or terminal the script already opened. If X says the code expired, start auth again and send a new link. Do not ask them to send the old address.
 - It saves one file, `$BOTS_HOME/dispatch/x_signin.json` (owner-only), that every bot shares. Never copy it into a bot folder and never write the client id or secret into any file. If any bot later says "X sign-in needs to be redone", run this step again.
 
 ### 5. Create bots, scripts, config and routines

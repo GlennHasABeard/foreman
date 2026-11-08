@@ -10,11 +10,11 @@ Commands
           Dispatch and shared by every bot. Individual templates save to the shared
           /workspace/x-signin/x_signin.json (X_SIGNIN_DIR) instead. Refuses if a sign-in
           already exists (use signin-check), unless --force.
-  signin-check  Reuse the sign-in already on this computer with one account read. Main path: approve in the bot's own browser,
-          which comes back to the local listener. Backup: paste the address the browser
-          landed on (`auth-paste '<address>'`, or stdin with --paste). The code is
-          swapped the moment it arrives; X gives about 30 seconds.
-  auth-paste  Hand a pasted address to the sign-in that is waiting.
+  signin-check  Reuse the sign-in already on this computer with one account read. Approve in the bot's own browser.
+          The browser comes back to the local listener and the sign-in finishes there.
+          If that page does not finish, stop. Do not ask for the callback address, the code, or a token in chat,
+          and do not put that address into a command or a log.
+  auth-paste  Existing local command. Do not ask for a callback address, code, or token in chat, and do not pass one from chat.
   full    Pull the complete follower and following lists, compare with the last
           full scan, log who followed, unfollowed, followed back or disappeared,
           score every account for fake, spam and inactivity signals, write a report.
@@ -1608,11 +1608,10 @@ def write_csv(path, rows):
 # Main path: the owner approves in the bot's own browser (on this computer). X sends
 # that browser back to redirect_uri, where this script is already listening, and the
 # code is swapped for a sign-in the moment it arrives.
-# Backup: if that page can't load, the owner copies the full address from the address
-# bar and pastes it to Foreman, who hands it to this same waiting script with
-#   python3 follow_watch.py auth-paste '<address>'
-# (or types it on stdin with --paste). The waiting script swaps it at once. X's code
-# only lives about 30 seconds, so the swap can't wait for anything else.
+# If that page does not finish, stop. Do not ask the owner for the callback address,
+# the code, or a token, and do not put that address into chat, a command, or a log.
+# The owner approves again in the bot's own browser, or finishes on the sign-in
+# screen or terminal this script already opened.
 # ----------------------------------------------------------------------------
 
 PASTE_WAIT_SECONDS = 600
@@ -1624,13 +1623,13 @@ def paste_inbox():
 
 
 def cmd_auth_paste(address):
-    """Hand a pasted redirect address to the sign-in that is waiting. Never stores it."""
+    """Write one local address to the waiting sign-in. Never stores it. Do not ask for it in chat."""
     p = paste_inbox()
     try:
         fd = os.open(p, os.O_WRONLY | os.O_NONBLOCK)
     except (FileNotFoundError, OSError):
-        raise SystemExit("No sign-in is waiting for an address. Start `follow_watch.py auth` again, approve, "
-                         "and paste the new address within about 30 seconds.")
+        raise SystemExit("No sign-in is waiting. Start `follow_watch.py auth` again and approve in the bot's own browser. "
+                         "Do not send the callback address, the code, or a token in chat.")
     with os.fdopen(fd, "w") as f:
         f.write(address.strip() + "\n")
     print("Handed to the waiting sign-in.")
@@ -1638,7 +1637,8 @@ def cmd_auth_paste(address):
 
 def wait_for_redirect(redirect, st, stdin_paste, timeout=PASTE_WAIT_SECONDS, ready=None):
     """Wait on every path at once and return the first query (dict of lists) that carries our state.
-    Paths: the local listener on redirect_uri, the paste pipe, and stdin when stdin_paste is set."""
+    Paths stay the local listener, the existing pipe, and stdin when stdin_paste is set.
+    Do not ask for a callback address in chat."""
     got = queue.Queue()
 
     def offer(address, source):
@@ -1670,7 +1670,8 @@ def wait_for_redirect(redirect, st, stdin_paste, timeout=PASTE_WAIT_SECONDS, rea
         stops.append(lambda: (srv.shutdown(), srv.server_close()))
         print(f"Listening on {redirect} for the browser to come back after Authorize.", flush=True)
     except OSError as e:
-        print(f"Can't listen on {redirect} ({e}). Use the paste backup.", file=sys.stderr)
+        print(f"Can't listen on {redirect} ({e}). Stop. Approve again in the bot's own browser. "
+              "Do not send the callback address, the code, or a token in chat.", file=sys.stderr)
 
     pipe = paste_inbox()
     os.makedirs(os.path.dirname(pipe), exist_ok=True)
@@ -1773,14 +1774,14 @@ def cmd_auth(store, cfg, client, paste, handle=None, force=False):
     print(f"1. Open this address in the bot's own browser, sign in to X{who} if asked, and click Authorize:\n")
     print(url + "\n")
     print("   X sends that browser back here and the sign-in finishes by itself.")
-    print("2. Backup, only if the page after Authorize doesn't load: copy the full address from the address bar "
-          "and paste it right away. You have about 30 seconds before X's one-time code expires. "
-          "It is swapped for the sign-in the moment it is pasted. The bot hands it over with:\n"
-          f"   CREW_BOT=\"{client.who}\" python3 {os.path.abspath(__file__)} auth-paste \"<the full address>\"\n",
+    print("2. If the page after Authorize does not finish the sign-in, stop. "
+          "Do not copy the address bar. Do not send the callback address, the code, or a token in chat, "
+          "and do not put that address into a command or a log. "
+          "Approve again in the bot's own browser, or finish on the sign-in screen or terminal this script already opened.\n",
           flush=True)
 
     def ready():
-        print("Waiting for X (up to 10 minutes). Both ways are open now.", flush=True)
+        print("Waiting for X (up to 10 minutes). Approve in the bot's own browser.", flush=True)
 
     q, source = wait_for_redirect(redirect, st, paste, ready=ready)
     if q is None:
@@ -1796,7 +1797,8 @@ def cmd_auth(store, cfg, client, paste, handle=None, force=False):
             client._keep(body)
     except urllib.error.HTTPError as e:
         raise SystemExit(f"X refused the code (HTTP {e.code}). It most likely expired (about 30 seconds). "
-                         "Run auth again and approve in the bot's browser, or paste faster.")
+                         "Run auth again and approve in the bot's browser. "
+                         "Do not send the callback address, the code, or a token in chat.")
     print(f"Code from {source} swapped for a sign-in. Saved to {signin_path()} (owner-only permissions), "
           + ("the one sign-in the whole crew shares." if crew_mode() == "shared" else "the one sign-in every individual bot on this computer shares."))
     me = client.me()
@@ -1810,9 +1812,9 @@ def cmd_auth(store, cfg, client, paste, handle=None, force=False):
 def main(argv=None):
     p = argparse.ArgumentParser(description="Read-only X follower and following tracker.")
     p.add_argument("command", choices=["auth", "auth-paste", "signin-check", "full", "light", "daily", "recheck", "report", "refile-gone"])
-    p.add_argument("address", nargs="?", help="auth-paste: the full address the browser landed on after Authorize")
+    p.add_argument("address", nargs="?", help="local argument only. Do not ask for a callback address, code, or token in chat.")
     p.add_argument("--dir", default=os.environ.get("FW_DIR", BOTS_HOME + "/follow-watch"))
-    p.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
+    p.add_argument("--paste", action="store_true", help="local stdin only. Do not take a callback address from chat.")
     p.add_argument("--force", action="store_true", help="auth: sign in again even though a sign-in exists (logs the old one out). light/daily: read newest followers even when the loss estimate is under daily_newest_threshold")
     p.add_argument("--likes", action="store_true", help="auth: add like.read (Reply Queue or Fan Finder chosen)")
     p.add_argument("--followers", action="store_true", help="recheck: include your followers, not only accounts you follow")
@@ -1822,7 +1824,9 @@ def main(argv=None):
 
     if args.command == "auth-paste":
         if not args.address:
-            raise SystemExit("auth-paste needs the full address, in quotes.")
+            raise SystemExit("This command was started without a local address. "
+                             "Do not ask for the callback address, the code, or a token in chat. "
+                             "Approve again in the bot's own browser.")
         cmd_auth_paste(args.address)
         return
 

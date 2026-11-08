@@ -1,3 +1,18 @@
+# Foreman v1.2.3 patch notes
+
+Docs only. Install pins point at v1.2.3 and check the `SHA256SUMS` file published beside the zip. The zip does not contain its own digest. Published v1.2.1 and v1.2.2 stay in place. This file does not say a share was accepted. A stranger install of v1.2.3 has not been recorded here. The desktop page matrix for this candidate has not been seen in this pack step.
+
+## Sign-in safety fix
+
+Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.
+
+- The automatic browser sign-in stays. If the callback page does not finish, stop.
+- Setup does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log.
+- Prices, caps, and the ledger are unchanged. This pack still uses the owner's own X app. It does not switch to a built-in X plugin.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
+
+## Previous release, v1.2.2
+
 # Foreman v1.2.2 patch notes
 
 Docs only. Install pins point at v1.2.2 and check the `SHA256SUMS` file published beside the zip. The zip does not contain its own digest. Published v1.2.1 stays in place. This file does not say a share was accepted. A stranger install of v1.2.2 has not been recorded here.

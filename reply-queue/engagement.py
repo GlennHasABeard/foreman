@@ -1039,7 +1039,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only engagement tracker for Reply Queue and Fan Finder.")
     ap.add_argument("command", choices=["auth", "pull", "radar", "leads", "status"])
     ap.add_argument("--trial", action="store_true")
-    ap.add_argument("--paste", action="store_true", help="auth: also accept the pasted address on stdin")
+    ap.add_argument("--paste", action="store_true", help="local stdin only. Do not take a callback address from chat.")
     ap.add_argument("--pull-if-stale", type=float, default=None, metavar="HOURS")
     ap.add_argument("--dir", default=os.environ.get("EN_DIR", BOTS_HOME + "/engagement"))
     a = ap.parse_args(argv)

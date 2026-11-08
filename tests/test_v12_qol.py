@@ -336,7 +336,7 @@ class Defaults(unittest.TestCase):
 
     def test_pack_version(self):
         meta = json.load(open(os.path.join(ROOT, "foreman", "standalone.json"), encoding="utf-8"))
-        self.assertEqual(meta["version"], "v1.2.2")
+        self.assertEqual(meta["version"], "v1.2.3")
 
     def test_capped_line(self):
         self.assertEqual(v11.capped_pull("mentions", 1), "Capped pull: skipped mentions (cost cap $1.00 reached)")
@@ -489,6 +489,11 @@ class V121Defaults(unittest.TestCase):
         self.assertIn("min-width:0", chips)
         source_seg = pages_v11.CSS.split(".seg{", 1)[1].split("}", 1)[0]
         self.assertEqual(source_seg, seg)
+        demo = pages_v11.CSS.split(".demo{", 1)[1].split("}", 1)[0]
+        self.assertNotIn("position:fixed", demo)
+        self.assertNotIn("bottom:", demo)
+        page_demo = css.split(".demo{", 1)[1].split("}", 1)[0]
+        self.assertEqual(page_demo, demo)
         html_root = os.path.join(ROOT, "demo", "juniper", "html")
         for dirpath, _dirs, names in os.walk(html_root):
             for name in names:

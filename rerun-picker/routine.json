@@ -10,7 +10,7 @@
     {
       "name": "Stale review nudge",
       "schedule": "{rerun_schedule}",
-      "prompt": "Run python3 rerun_picker.py nudge from the Rerun Picker folder. If the review is stale_review_days old and no rejects are synced, it prints one nudge and writes picks/nudge.json. It never builds a new picks file. $0, no X calls. This routine is installed at setup. Do not wait for the owner to ask for it."
+      "prompt": "Run python3 rerun_picker.py nudge from the Rerun Picker folder. If the review is stale_review_days old and no rejects are synced, it prints one nudge and writes picks/nudge.json. It never builds a new picks file. $0, no X calls. This routine exists only because the owner said yes at setup."
     },
     {
       "name": "Update check",

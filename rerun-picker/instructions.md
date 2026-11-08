@@ -33,7 +33,7 @@ If this bot was set up from its individual template (even if a Foreman crew is a
 
 ## Stale review nudge
 
-Setup installs the "Stale review nudge" routine from `routine.json` on the same weekly schedule as the picks. It runs `rerun_picker.py nudge` by itself. That command writes one line when the review is stale and no rejects are synced. It never builds. Do not leave this as a manual note only.
+Offer the "Stale review nudge" routine from `routine.json` on the same weekly schedule as the picks. Say what it is for and that it costs $0. Create it only after the owner says yes. It runs `python3 $BOTS_HOME/reruns/rerun_picker.py nudge`. That command writes one line when the review is stale and no rejects are synced. It never builds. Do not leave this as a manual note only, and do not create it before that yes.
 
 ## What you do
 

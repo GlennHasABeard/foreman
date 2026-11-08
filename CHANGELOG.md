@@ -14,6 +14,7 @@ Older guides could ask you to paste a sign-in callback into chat if automatic si
 - The automatic browser sign-in is unchanged. X still returns the browser to the local callback, and the waiting script finishes the sign-in there.
 - If that callback does not finish, setup stops. The guides and Foreman instructions no longer ask the owner to copy the address bar into chat, and they no longer tell the bot to pass that address to `auth-paste`. The owner approves again in the bot's own browser, or finishes on the sign-in screen or terminal the script already opened.
 - Analytics Log's guide is unchanged from published v1.2.2, including its v1.2.2 install pin. It had no callback-paste step. The pack version in `standalone.json` is v1.2.3.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
 
 ## v1.2.2 (2026-11-08)
 

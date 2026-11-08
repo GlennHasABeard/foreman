@@ -146,6 +146,7 @@ Older guides could ask you to paste a sign-in callback into chat if automatic si
 
 - Docs only. Prices, caps, the ledger, and the automatic browser sign-in stay as in v1.2.2. Published v1.2.2 stays available and is not replaced.
 - If the browser callback does not finish, setup stops. It does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log. Analytics Log's own guide is the v1.2.2 text.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
 
 What's new in v1.2.2 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 

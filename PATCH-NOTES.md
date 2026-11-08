@@ -9,6 +9,7 @@ Older guides could ask you to paste a sign-in callback into chat if automatic si
 - The automatic browser sign-in stays. If the callback page does not finish, stop.
 - Setup does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log.
 - Prices, caps, and the ledger are unchanged. This pack still uses the owner's own X app. It does not switch to a built-in X plugin.
+- The Demo data badge sits in the page flow. It no longer covers a button at the bottom of a phone screen.
 
 ## Previous release, v1.2.2
 

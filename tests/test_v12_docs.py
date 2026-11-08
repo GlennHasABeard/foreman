@@ -67,7 +67,11 @@ class V122Docs(unittest.TestCase):
                 self.assertIn(phrase, text, rel)
             for phrase in SILENT:
                 self.assertNotIn(phrase, text, rel)
-            self.assertIn("/workspace/foreman/foreman/fetch_release.sh v1.2.3 --bot ", text)
+            if rel.endswith("analytics-log.md"):
+                self.assertIn("/workspace/foreman/foreman/fetch_release.sh v1.2.2 --bot analytics-log", text)
+                self.assertNotIn("v1.2.3", text)
+            else:
+                self.assertIn("/workspace/foreman/foreman/fetch_release.sh v1.2.3 --bot ", text)
             self.assertNotIn("v1.2.1", text, rel)
         # Analytics has no X sign-in. The other six keep reuse and force consent.
         for rel in GUIDES:

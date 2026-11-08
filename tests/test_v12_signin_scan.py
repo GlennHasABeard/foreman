@@ -101,6 +101,7 @@ class SignInInstructionScan(unittest.TestCase):
             "Callback URI / Redirect URL: enter exactly http://127.0.0.1:8765/callback",
             "If the script prints a backup that asks for that address, do not use it.",
             "Secrets only in stored secrets. Never in chat.",
+            "Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.",
         ]
         for sample in samples:
             self.assertEqual(unsafe_hits(sample), [], sample)

@@ -140,8 +140,12 @@ What's new in v1.1 for individual templates (each template's release notes list 
 
 What's new in v1.2.3 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 
+## Sign-in safety fix
+
+Older guides could ask you to paste a sign-in callback into chat if automatic sign-in failed. If you did that, disconnect and reconnect this app in your own X Connected apps settings, then run setup again. No action is needed if sign-in worked automatically.
+
 - Docs only. Prices, caps, the ledger, and the automatic browser sign-in stay as in v1.2.2. Published v1.2.2 stays available and is not replaced.
-- If the browser callback does not finish, setup stops. It does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log.
+- If the browser callback does not finish, setup stops. It does not ask for the callback address, the code, or a token in chat, and it does not put that address into a command or a log. Analytics Log's own guide is the v1.2.2 text.
 
 What's new in v1.2.2 (full notes in PATCH-NOTES.md and CHANGELOG.md):
 
